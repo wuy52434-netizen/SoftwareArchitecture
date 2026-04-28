@@ -7,9 +7,9 @@ spring:
   
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/library_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: root
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/library_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root}
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
       initial-size: 5
@@ -19,7 +19,7 @@ spring:
   
   data:
     redis:
-      host: localhost
+      host: ${REDIS_HOST:localhost}
       port: 6379
       password: 
       database: 0
@@ -35,6 +35,22 @@ spring:
     user:
       name: admin
       password: admin123
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: 
+        group: DEFAULT_GROUP
+        weight: 1
+    
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD_SERVER:localhost:8858}
+        port: 8719
+      eager: true
+      filter:
+        enabled: true
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
@@ -54,7 +70,20 @@ jwt:
   access-token-expire: 7200000
   refresh-token-expire: 604800000
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 logging:
   level:
     com.library.user: debug
     org.springframework.security: debug
+    com.alibaba.csp.sentinel: info
