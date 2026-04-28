@@ -1,0 +1,17 @@
+FROM eclipse-temurin:17-jre-alpine
+
+WORKDIR /app
+
+RUN addgroup -S library && adduser -S library -G library
+
+COPY api-gateway/target/*.jar app.jar
+
+RUN chown -R library:library /app
+
+USER library
+
+EXPOSE 8080
+
+ENV JAVA_OPTS="-Xms256m -Xmx512m"
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

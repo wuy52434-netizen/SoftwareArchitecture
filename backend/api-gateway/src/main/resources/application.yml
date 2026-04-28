@@ -1,0 +1,125 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD_SERVER:localhost:8858}
+        port: 8719
+      eager: true
+
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      
+      routes:
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/**,/api/auth/**
+          filters:
+            - StripPrefix=0
+
+        - id: book-service
+          uri: lb://book-service
+          predicates:
+            - Path=/api/books/**,/api/categories/**
+          filters:
+            - StripPrefix=0
+
+        - id: borrow-service
+          uri: lb://borrow-service
+          predicates:
+            - Path=/api/borrows/**,/api/borrow/**,/api/return/**,/api/my-borrows/**,/api/borrow-records/**
+          filters:
+            - StripPrefix=0
+
+        - id: search-service
+          uri: lb://search-service
+          predicates:
+            - Path=/api/search/**
+          filters:
+            - StripPrefix=0
+
+        - id: stats-service
+          uri: lb://stats-service
+          predicates:
+            - Path=/api/stats/**
+          filters:
+            - StripPrefix=0
+
+        - id: notify-service
+          uri: lb://notify-service
+          predicates:
+            - Path=/api/notify/**
+          filters:
+            - StripPrefix=0
+
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origin-patterns: "*"
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowed-headers: "*"
+            allow-credentials: true
+            max-age: 3600
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+
+jwt:
+  secret: ${JWT_SECRET:library-management-system-jwt-secret-key-2024}
+  access-token-expire: 7200000
+  refresh-token-expire: 604800000
+
+gateway:
+  white-list:
+    - /api/auth/login
+    - /api/auth/register
+    - /api/auth/refresh
+    - /api/books
+    - /api/books/*
+    - /api/search
+    - /api/search/*
+    - /error
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    com.library: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+    com.alibaba.csp.sentinel: info
