@@ -153,10 +153,10 @@
             <span>Vue 3 + Vite 5 + Element Plus</span>
           </el-descriptions-item>
           <el-descriptions-item label="后端服务">
-            <el-tag size="large" type="success">Flask</el-tag>
+            <el-tag size="large" type="success">Spring Boot 微服务</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="API地址">
-            <span>http://localhost:5000</span>
+            <span>http://localhost:8080</span>
           </el-descriptions-item>
         </el-descriptions>
       </div>

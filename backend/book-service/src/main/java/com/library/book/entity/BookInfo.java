@@ -31,9 +31,9 @@ public class BookInfo implements Serializable {
 
     private String summary;
 
-    private LocalDate publicationDate;
+    private LocalDate publishDate;
 
-    private String coverImage;
+    private String coverUrl;
 
     private Integer totalCopies;
 
@@ -46,6 +46,8 @@ public class BookInfo implements Serializable {
     private String description;
 
     private String location;
+
+    private Integer borrowCount;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

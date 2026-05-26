@@ -122,7 +122,7 @@ router.beforeEach(async (to, from, next) => {
     return
   }
   
-  if (to.meta.requiresAdmin && authStore.user?.role !== 'admin') {
+  if (to.meta.requiresAdmin && authStore.user?.userType !== 'admin') {
     ElMessage.error('权限不足')
     next('/portal')
     return

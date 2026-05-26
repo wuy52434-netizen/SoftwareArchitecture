@@ -31,8 +31,8 @@ public class Constants {
     public static final String BORROW_STATUS_RETURNED = "已归还";
     public static final String BORROW_STATUS_OVERDUE = "逾期";
 
-    public static final String USER_STATUS_ACTIVE = "正常";
-    public static final String USER_STATUS_INACTIVE = "禁用";
+    public static final String USER_STATUS_ACTIVE = "active";
+    public static final String USER_STATUS_INACTIVE = "inactive";
 
     public static final String REDIS_KEY_PREFIX = "library:";
     public static final String REDIS_BOOK_LIST_KEY = REDIS_KEY_PREFIX + "books:list:";

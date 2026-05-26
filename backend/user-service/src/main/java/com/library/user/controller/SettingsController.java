@@ -11,7 +11,7 @@ import java.util.Map;
 
 @Tag(name = "系统设置接口")
 @RestController
-@RequestMapping("/settings")
+@RequestMapping("/api/settings")
 @RequiredArgsConstructor
 public class SettingsController {
 

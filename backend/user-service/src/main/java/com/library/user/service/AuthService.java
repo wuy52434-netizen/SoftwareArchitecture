@@ -31,7 +31,7 @@ public class AuthService {
             throw new BusinessException(ResultCode.USER_PASSWORD_ERROR);
         }
 
-        if ("禁用".equals(user.getStatus())) {
+        if ("inactive".equals(user.getStatus())) {
             throw new BusinessException(ResultCode.USER_DISABLED);
         }
 

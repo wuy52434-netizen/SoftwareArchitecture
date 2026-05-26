@@ -3,6 +3,7 @@ package com.library.book.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.library.book.dto.BookDTO.*;
 import com.library.book.entity.BookCategory;
+import com.library.book.entity.BookCopy;
 import com.library.book.entity.BookInfo;
 import com.library.book.service.BookService;
 import com.library.common.result.PageResult;
@@ -18,7 +19,7 @@ import java.util.stream.Collectors;
 
 @Tag(name = "图书管理接口")
 @RestController
-@RequestMapping("")
+@RequestMapping("/api")
 @RequiredArgsConstructor
 public class BookController {
 
@@ -89,6 +90,34 @@ public class BookController {
         BookInfo book = bookService.getById(id);
         bookService.updateBook(id, request);
         return Result.success("状态更新成功", bookService.toBookResponse(book));
+    }
+
+    @Operation(summary = "扣减库存")
+    @PutMapping("/books/{id}/decrease-stock")
+    public Result<Void> decreaseStock(@PathVariable Long id, @RequestParam Long copyId) {
+        bookService.decreaseStock(id, copyId);
+        return Result.success("扣减成功");
+    }
+
+    @Operation(summary = "增加库存")
+    @PutMapping("/books/{id}/increase-stock")
+    public Result<Void> increaseStock(@PathVariable Long id, @RequestParam Long copyId) {
+        bookService.increaseStock(id, copyId);
+        return Result.success("归还成功");
+    }
+
+    @Operation(summary = "根据副本ID获取副本")
+    @GetMapping("/books/copy/{copyId}")
+    public Result<BookCopy> getCopyById(@PathVariable Long copyId) {
+        BookCopy copy = bookService.getCopyById(copyId);
+        return Result.success(copy);
+    }
+
+    @Operation(summary = "更新副本状态")
+    @PutMapping("/books/copy/{copyId}/status")
+    public Result<Void> updateCopyStatus(@PathVariable Long copyId, @RequestParam String status) {
+        bookService.updateCopyStatus(copyId, status);
+        return Result.success("更新成功");
     }
 
     @Operation(summary = "获取热门图书")

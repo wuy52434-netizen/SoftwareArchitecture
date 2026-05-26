@@ -1,5 +1,6 @@
 package com.library.gateway.filter;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.library.common.result.Result;
 import com.library.common.result.ResultCode;
@@ -9,31 +10,35 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import jakarta.servlet.*;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.annotation.Order;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.core.Ordered;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
 
 import javax.crypto.SecretKey;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Component
-@Order(1)
 @RequiredArgsConstructor
-public class JwtAuthenticationFilter implements Filter {
+public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private final JwtProperties jwtProperties;
     private final GatewayProperties gatewayProperties;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final ReactiveRedisTemplate<String, String> reactiveRedisTemplate;
     private final ObjectMapper objectMapper;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
@@ -41,33 +46,26 @@ public class JwtAuthenticationFilter implements Filter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     @Override
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
-            throws IOException, ServletException {
-
-        HttpServletRequest httpRequest = (HttpServletRequest) request;
-        HttpServletResponse httpResponse = (HttpServletResponse) response;
-
-        String path = httpRequest.getRequestURI();
-        String method = httpRequest.getMethod();
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        ServerHttpRequest request = exchange.getRequest();
+        String path = request.getURI().getPath();
+        String method = request.getMethod().name();
 
         log.debug("请求路径: {} {}", method, path);
 
         if ("OPTIONS".equalsIgnoreCase(method)) {
-            chain.doFilter(request, response);
-            return;
+            return chain.filter(exchange);
         }
 
         if (isWhiteList(path)) {
             log.debug("白名单路径，跳过认证: {}", path);
-            chain.doFilter(request, response);
-            return;
+            return chain.filter(exchange);
         }
 
-        String token = extractToken(httpRequest);
+        String token = extractToken(request);
         if (!StringUtils.hasText(token)) {
             log.warn("未找到 Token，路径: {}", path);
-            writeUnauthorizedResponse(httpResponse, "未登录或Token已过期");
-            return;
+            return writeUnauthorizedResponse(exchange.getResponse(), "未登录或Token已过期");
         }
 
         try {
@@ -86,28 +84,38 @@ public class JwtAuthenticationFilter implements Filter {
             String role = claims.get("role", String.class);
 
             String tokenKey = "user:token:" + userId;
-            Object storedToken = redisTemplate.opsForValue().get(tokenKey);
-            if (storedToken == null || !token.equals(storedToken)) {
-                log.warn("Token 已失效 (可能已登出): userId={}", userId);
-                writeUnauthorizedResponse(httpResponse, "Token已失效，请重新登录");
-                return;
-            }
 
-            httpRequest.setAttribute("userId", userId);
-            httpRequest.setAttribute("username", username);
-            httpRequest.setAttribute("role", role);
+            return reactiveRedisTemplate.opsForValue().get(tokenKey)
+                    .defaultIfEmpty("")
+                    .flatMap(storedToken -> {
+                        if (storedToken.isEmpty() || !token.equals(storedToken)) {
+                            log.warn("Token 已失效 (可能已登出): userId={}", userId);
+                            return writeUnauthorizedResponse(exchange.getResponse(), "Token已失效，请重新登录");
+                        }
 
-            log.debug("Token 验证通过: userId={}, username={}, role={}", userId, username, role);
-            chain.doFilter(request, response);
+                        ServerHttpRequest mutatedRequest = request.mutate()
+                                .header("X-User-Id", String.valueOf(userId))
+                                .header("X-User-Name", username)
+                                .header("X-User-Role", role)
+                                .build();
+
+                        log.debug("Token 验证通过: userId={}, username={}, role={}", userId, username, role);
+                        return chain.filter(exchange.mutate().request(mutatedRequest).build());
+                    });
 
         } catch (Exception e) {
             log.error("Token 验证失败: {}", e.getMessage());
-            writeUnauthorizedResponse(httpResponse, "Token无效或已过期");
+            return writeUnauthorizedResponse(exchange.getResponse(), "Token无效或已过期");
         }
     }
 
-    private String extractToken(HttpServletRequest request) {
-        String bearerToken = request.getHeader(AUTHORIZATION_HEADER);
+    @Override
+    public int getOrder() {
+        return -1;
+    }
+
+    private String extractToken(ServerHttpRequest request) {
+        String bearerToken = request.getHeaders().getFirst(AUTHORIZATION_HEADER);
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith(BEARER_PREFIX)) {
             return bearerToken.substring(BEARER_PREFIX.length());
         }
@@ -123,13 +131,19 @@ public class JwtAuthenticationFilter implements Filter {
         return false;
     }
 
-    private void writeUnauthorizedResponse(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding("UTF-8");
+    private Mono<Void> writeUnauthorizedResponse(ServerHttpResponse response, String message) {
+        response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
 
         Result<Void> result = Result.error(ResultCode.UNAUTHORIZED.getCode(), message);
-        String json = objectMapper.writeValueAsString(result);
-        response.getWriter().write(json);
+        byte[] bytes;
+        try {
+            bytes = objectMapper.writeValueAsBytes(result);
+        } catch (JsonProcessingException e) {
+            bytes = "{\"code\":401,\"message\":\"Unauthorized\"}".getBytes(StandardCharsets.UTF_8);
+        }
+
+        DataBuffer buffer = response.bufferFactory().wrap(bytes);
+        return response.writeWith(Mono.just(buffer));
     }
 }

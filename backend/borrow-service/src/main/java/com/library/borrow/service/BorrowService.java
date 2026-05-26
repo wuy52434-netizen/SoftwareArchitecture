@@ -243,9 +243,8 @@ public class BorrowService {
 
     public Page<BorrowRecord> pageRecords(int page, int size, Long userId, String status) {
         Page<BorrowRecord> pageParam = new Page<>(page, size);
-        
+
         LambdaQueryWrapper<BorrowRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(BorrowRecord::getDeleted, 0);
         
         if (userId != null) {
             wrapper.eq(BorrowRecord::getUserId, userId);

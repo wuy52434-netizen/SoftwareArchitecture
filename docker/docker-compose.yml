@@ -192,6 +192,8 @@ services:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
       - MYSQL_HOST=mysql
+      - MYSQL_USERNAME=root
+      - MYSQL_PASSWORD=root123
       - REDIS_HOST=redis
       - TZ=Asia/Shanghai
     depends_on:
@@ -219,6 +221,8 @@ services:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
       - MYSQL_HOST=mysql
+      - MYSQL_USERNAME=root
+      - MYSQL_PASSWORD=root123
       - REDIS_HOST=redis
       - ELASTICSEARCH_HOSTS=elasticsearch:9200
       - TZ=Asia/Shanghai
@@ -249,8 +253,12 @@ services:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
       - MYSQL_HOST=mysql
+      - MYSQL_USERNAME=root
+      - MYSQL_PASSWORD=root123
       - REDIS_HOST=redis
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=admin123
       - TZ=Asia/Shanghai
     depends_on:
       nacos:
@@ -303,6 +311,8 @@ services:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=admin123
       - TZ=Asia/Shanghai
     depends_on:
       nacos:
@@ -327,9 +337,13 @@ services:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
       - MYSQL_HOST=mysql
+      - MYSQL_USERNAME=root
+      - MYSQL_PASSWORD=root123
       - REDIS_HOST=redis
       - ELASTICSEARCH_HOSTS=elasticsearch:9200
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=admin123
       - TZ=Asia/Shanghai
     depends_on:
       nacos:

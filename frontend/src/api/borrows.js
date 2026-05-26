@@ -26,5 +26,5 @@ export async function getAllBorrows(params = {}) {
   if (userId) queryParams.append('user_id', userId)
   if (status) queryParams.append('status', status)
   
-  return api.get(`/borrows?${queryParams.toString()}`)
+  return api.get(`/borrow-records?${queryParams.toString()}`)
 }

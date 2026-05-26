@@ -6,6 +6,7 @@ import com.library.book.dto.BookDTO.*;
 import com.library.book.entity.BookCategory;
 import com.library.book.entity.BookCopy;
 import com.library.book.entity.BookInfo;
+import com.library.book.mapper.BookCopyMapper;
 import com.library.book.mapper.BookInfoMapper;
 import com.library.common.exception.BusinessException;
 import com.library.common.result.ResultCode;
@@ -27,6 +28,7 @@ import static com.library.common.constant.Constants.*;
 public class BookService {
 
     private final BookInfoMapper bookInfoMapper;
+    private final BookCopyMapper bookCopyMapper;
     private final RedisUtil redisUtil;
 
     public BookInfo getById(Long id) {
@@ -51,9 +53,8 @@ public class BookService {
 
     public Page<BookInfo> pageBooks(int page, int size, String search, Long categoryId, String status) {
         Page<BookInfo> pageParam = new Page<>(page, size);
-        
+
         LambdaQueryWrapper<BookInfo> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(BookInfo::getDeleted, 0);
         
         if (search != null && !search.isEmpty()) {
             wrapper.and(w -> w
@@ -93,8 +94,8 @@ public class BookService {
         book.setCategoryId(request.getCategoryId());
         book.setPrice(request.getPrice());
         book.setSummary(request.getSummary());
-        book.setPublicationDate(request.getPublicationDate());
-        book.setCoverImage(request.getCoverImage());
+        book.setPublishDate(request.getPublicationDate());
+        book.setCoverUrl(request.getCoverImage());
         book.setTotalCopies(request.getTotalCopies() != null ? request.getTotalCopies() : 0);
         book.setAvailableCopies(request.getTotalCopies() != null ? request.getTotalCopies() : 0);
         book.setStatus(BOOK_STATUS_AVAILABLE);
@@ -132,10 +133,10 @@ public class BookService {
             book.setSummary(request.getSummary());
         }
         if (request.getPublicationDate() != null) {
-            book.setPublicationDate(request.getPublicationDate());
+            book.setPublishDate(request.getPublicationDate());
         }
         if (request.getCoverImage() != null) {
-            book.setCoverImage(request.getCoverImage());
+            book.setCoverUrl(request.getCoverImage());
         }
         if (request.getStatus() != null) {
             book.setStatus(request.getStatus());
@@ -211,10 +212,10 @@ public class BookService {
         response.setPrice(book.getPrice());
         response.setSummary(book.getSummary());
         response.setDescription(book.getDescription());
-        response.setPublicationDate(book.getPublicationDate());
-        response.setPublishDate(book.getPublicationDate() != null ? book.getPublicationDate().getYear() : null);
-        response.setCoverImage(book.getCoverImage());
-        response.setCoverUrl(book.getCoverImage() != null ? book.getCoverImage() : "/static/images/" + book.getTitle() + ".jpg");
+        response.setPublicationDate(book.getPublishDate());
+        response.setPublishDate(book.getPublishDate() != null ? book.getPublishDate().getYear() : null);
+        response.setCoverImage(book.getCoverUrl());
+        response.setCoverUrl(book.getCoverUrl());
         response.setTotalCopies(book.getTotalCopies());
         response.setAvailableCopies(book.getAvailableCopies());
         response.setStock(book.getAvailableCopies());
@@ -223,6 +224,37 @@ public class BookService {
         response.setLocation(book.getLocation());
         response.setCreatedAt(book.getCreatedAt() != null ? book.getCreatedAt().toString() : null);
         return response;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void decreaseStock(Long bookId, Long copyId) {
+        updateStock(bookId, -1);
+        if (copyId != null) {
+            updateCopyStatus(copyId, "borrowed");
+        }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void increaseStock(Long bookId, Long copyId) {
+        updateStock(bookId, 1);
+        if (copyId != null) {
+            updateCopyStatus(copyId, "available");
+        }
+    }
+
+    public BookCopy getCopyById(Long copyId) {
+        BookCopy copy = bookCopyMapper.selectById(copyId);
+        if (copy == null) {
+            throw new BusinessException(ResultCode.BOOK_NOT_FOUND, "副本不存在");
+        }
+        return copy;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void updateCopyStatus(Long copyId, String status) {
+        BookCopy copy = getCopyById(copyId);
+        copy.setStatus(status);
+        bookCopyMapper.updateById(copy);
     }
 
     private void clearBookCache() {

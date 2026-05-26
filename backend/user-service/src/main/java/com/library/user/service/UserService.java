@@ -39,7 +39,6 @@ public class UserService {
     public List<User> listAll() {
         return userMapper.selectList(
                 new LambdaQueryWrapper<User>()
-                        .eq(User::getDeleted, 0)
                         .orderByDesc(User::getCreatedAt)
         );
     }
@@ -59,7 +58,7 @@ public class UserService {
         user.setEmail(request.getEmail());
         user.setGender(request.getGender());
         user.setUserType("reader");
-        user.setStatus("正常");
+        user.setStatus("active");
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
         user.setDeleted(0);

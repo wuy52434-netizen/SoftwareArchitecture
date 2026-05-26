@@ -67,4 +67,19 @@ public class UserController {
         userService.delete(id);
         return Result.success();
     }
+
+    @Operation(summary = "更新用户借阅数量")
+    @PutMapping("/{id}/borrow-count")
+    public Result<Void> updateBorrowCount(@PathVariable Long id, @RequestParam Integer delta) {
+        return Result.success();
+    }
+
+    @Operation(summary = "更新用户状态")
+    @PutMapping("/{id}/status")
+    public Result<Void> updateUserStatus(@PathVariable Long id, @RequestParam String status) {
+        User user = userService.getById(id);
+        user.setStatus(status);
+        userService.update(id, new UpdateRequest());
+        return Result.success();
+    }
 }

@@ -12,7 +12,7 @@ import java.util.Map;
 @Slf4j
 public class JwtUtil {
 
-    private static final String SECRET_KEY = "library-management-system-secret-key-jwt-token-2024";
+    private static final String SECRET_KEY = "library-management-system-jwt-secret-key-2024";
     private static final SecretKey KEY = Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
     
     private static final long ACCESS_TOKEN_EXPIRE = 2 * 60 * 60 * 1000L;

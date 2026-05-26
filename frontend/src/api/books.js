@@ -35,9 +35,9 @@ export async function updateBookStatus(id, status) {
 }
 
 export async function getPopularBooks() {
-  return api.get('/books?popular=true&per_page=8')
+  return api.get('/books/popular')
 }
 
 export async function getNewBooks() {
-  return api.get('/books?sort=newest&per_page=8')
+  return api.get('/books/newest')
 }
