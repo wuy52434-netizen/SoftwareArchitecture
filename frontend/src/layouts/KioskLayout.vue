@@ -3,7 +3,7 @@
     <div class="kiosk-header">
       <div class="header-left">
         <div class="kiosk-logo">
-          <el-icon><Library /></el-icon>
+          <el-icon><Reading /></el-icon>
         </div>
         <div class="kiosk-title">
           <h1>智慧图书馆</h1>
@@ -38,7 +38,7 @@
         <span>技术支持：010-12345678</span>
       </div>
       <div class="footer-right">
-        <el-button type="text" size="large" @click="backToHome">
+        <el-button link size="large" @click="backToHome">
           <el-icon><HomeFilled /></el-icon>
           返回首页
         </el-button>
@@ -52,7 +52,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { 
-  Library, 
+  Reading, 
   Location, 
   QuestionFilled,
   HomeFilled 

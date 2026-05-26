@@ -48,6 +48,11 @@ public class UserDTO {
     }
 
     @Data
+    public static class RefreshTokenRequest {
+        private String refreshToken;
+    }
+
+    @Data
     public static class UserResponse {
         private Long userId;
         private String username;

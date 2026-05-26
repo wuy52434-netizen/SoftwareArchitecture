@@ -28,7 +28,7 @@ spring:
         - id: user-service
           uri: lb://user-service
           predicates:
-            - Path=/api/users/**,/api/auth/**
+            - Path=/api/users/**,/api/auth/**,/api/settings/**
           filters:
             - StripPrefix=0
 
@@ -99,9 +99,11 @@ gateway:
     - /api/auth/register
     - /api/auth/refresh
     - /api/books
-    - /api/books/*
+    - /api/books/**
     - /api/search
-    - /api/search/*
+    - /api/search/**
+    - /api/settings
+    - /api/settings/**
     - /error
 
 management:

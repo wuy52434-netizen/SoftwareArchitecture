@@ -49,9 +49,4 @@ public class AuthController {
         UserResponse user = authService.getCurrentUser(userId);
         return Result.success(user);
     }
-
-    @Data
-    public static class RefreshTokenRequest {
-        private String refreshToken;
-    }
 }

@@ -13,6 +13,7 @@ public class BorrowDTO {
         @NotNull(message = "图书ID不能为空")
         private Long bookId;
         
+        private Long copyId;
         private LocalDate borrowDate;
         private LocalDate dueDate;
     }
@@ -44,6 +45,7 @@ public class BorrowDTO {
     @Data
     public static class ReturnResponse {
         private Long recordId;
+        private Long bookId;
         private LocalDate returnDate;
         private Integer overdueDays;
         private BigDecimal fineAmount;

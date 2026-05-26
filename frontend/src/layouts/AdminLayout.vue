@@ -3,7 +3,7 @@
     <el-aside :width="isCollapse ? '64px' : '220px'" class="admin-aside">
       <div class="logo-section">
         <div class="logo-icon">
-          <el-icon><Library /></el-icon>
+          <el-icon><Reading /></el-icon>
         </div>
         <div class="logo-text" v-show="!isCollapse">
           <h1>图书管理系统</h1>
@@ -107,7 +107,7 @@ import { ref, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Library,
+  Reading,
   Collection,
   Document,
   User,

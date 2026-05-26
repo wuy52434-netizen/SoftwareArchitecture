@@ -5,7 +5,7 @@ services:
     image: mysql:8.0
     container_name: library-mysql
     ports:
-      - "3306:3306"
+      - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root123
       MYSQL_DATABASE: library
@@ -27,7 +27,7 @@ services:
     image: redis:7-alpine
     container_name: library-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis-data:/data
       - ./redis.conf:/etc/redis/redis.conf:ro
@@ -41,7 +41,7 @@ services:
       retries: 3
 
   rabbitmq:
-    image: rabbitmq:3.12-management-alpine
+    image: rabbitmq:3-management-alpine
     container_name: library-rabbitmq
     ports:
       - "5672:5672"
@@ -61,7 +61,7 @@ services:
       retries: 5
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    image: elasticsearch:8.11.3
     container_name: library-elasticsearch
     ports:
       - "9200:9200"
@@ -85,7 +85,7 @@ services:
       retries: 5
 
   nacos:
-    image: nacos/nacos-server:v2.2.3
+    image: nacos/nacos-server:v2.3.2
     container_name: library-nacos
     ports:
       - "8848:8848"
@@ -106,7 +106,7 @@ services:
       retries: 5
 
   sentinel-dashboard:
-    image: bladex/sentinel-dashboard:1.8.6
+    image: bladex/sentinel-dashboard
     container_name: library-sentinel
     ports:
       - "8858:8858"
@@ -118,7 +118,7 @@ services:
       - library-network
 
   prometheus:
-    image: prom/prometheus:v2.47.0
+    image: prom/prometheus:v2.53.0
     container_name: library-prometheus
     ports:
       - "9090:9090"
@@ -141,7 +141,7 @@ services:
       - borrow-service
 
   grafana:
-    image: grafana/grafana:10.2.0
+    image: grafana/grafana:11.0.0
     container_name: library-grafana
     ports:
       - "3001:3000"

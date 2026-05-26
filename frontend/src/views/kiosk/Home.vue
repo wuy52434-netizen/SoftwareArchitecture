@@ -2,7 +2,7 @@
   <div class="kiosk-home">
     <div class="welcome-section">
       <div class="welcome-icon">
-        <el-icon><Hand /></el-icon>
+        <el-icon><Pointer /></el-icon>
       </div>
       <div class="welcome-text">
         <h2>欢迎使用智慧图书馆</h2>
@@ -134,7 +134,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { 
-  Hand,
+  Pointer,
   Plus,
   Minus,
   Search,

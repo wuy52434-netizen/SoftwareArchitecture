@@ -1,14 +1,8 @@
-FROM eclipse-temurin:17-jre-alpine
+FROM amazoncorretto:17
 
 WORKDIR /app
 
-RUN addgroup -S library && adduser -S library -G library
-
 COPY api-gateway/target/*.jar app.jar
-
-RUN chown -R library:library /app
-
-USER library
 
 EXPOSE 8080
 
