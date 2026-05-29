@@ -32,7 +32,8 @@ public class CustomUserDetailsService implements UserDetailsService {
         List<SimpleGrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getUserType().toUpperCase()));
 
-        return new org.springframework.security.core.userdetails.User(
+        return new LibraryUserDetails(
+                user.getUserId(),
                 user.getUsername(),
                 user.getPassword(),
                 authorities
@@ -48,7 +49,8 @@ public class CustomUserDetailsService implements UserDetailsService {
         List<SimpleGrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getUserType().toUpperCase()));
 
-        return new org.springframework.security.core.userdetails.User(
+        return new LibraryUserDetails(
+                user.getUserId(),
                 user.getUsername(),
                 user.getPassword(),
                 authorities

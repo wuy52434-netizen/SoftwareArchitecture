@@ -22,14 +22,14 @@ public class Constants {
     public static final String BOOK_STATUS_BORROWED = "borrowed";
     public static final String BOOK_STATUS_FROZEN = "frozen";
 
-    public static final String COPY_STATUS_AVAILABLE = "在馆";
-    public static final String COPY_STATUS_BORROWED = "借出";
-    public static final String COPY_STATUS_DAMAGED = "损坏";
-    public static final String COPY_STATUS_LOST = "丢失";
+    public static final String COPY_STATUS_AVAILABLE = "available";
+    public static final String COPY_STATUS_BORROWED = "borrowed";
+    public static final String COPY_STATUS_DAMAGED = "damaged";
+    public static final String COPY_STATUS_LOST = "lost";
 
-    public static final String BORROW_STATUS_ACTIVE = "借出";
-    public static final String BORROW_STATUS_RETURNED = "已归还";
-    public static final String BORROW_STATUS_OVERDUE = "逾期";
+    public static final String BORROW_STATUS_ACTIVE = "active";
+    public static final String BORROW_STATUS_RETURNED = "returned";
+    public static final String BORROW_STATUS_OVERDUE = "overdue";
 
     public static final String USER_STATUS_ACTIVE = "active";
     public static final String USER_STATUS_INACTIVE = "inactive";

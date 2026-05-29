@@ -13,12 +13,14 @@ import com.library.common.result.ResultCode;
 import com.library.common.util.RedisUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 import static com.library.common.constant.Constants.*;
 
@@ -30,6 +32,7 @@ public class BookService {
     private final BookInfoMapper bookInfoMapper;
     private final BookCopyMapper bookCopyMapper;
     private final RedisUtil redisUtil;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     public BookInfo getById(Long id) {
         String cacheKey = REDIS_BOOK_DETAIL_KEY + id;
@@ -51,7 +54,7 @@ public class BookService {
         return bookInfoMapper.selectByIsbn(isbn);
     }
 
-    public Page<BookInfo> pageBooks(int page, int size, String search, Long categoryId, String status) {
+    public Page<BookInfo> pageBooks(int page, int size, String search, Long categoryId, String language, String year, String status) {
         Page<BookInfo> pageParam = new Page<>(page, size);
 
         LambdaQueryWrapper<BookInfo> wrapper = new LambdaQueryWrapper<>();
@@ -72,6 +75,24 @@ public class BookService {
         
         if (status != null && !status.isEmpty()) {
             wrapper.eq(BookInfo::getStatus, status);
+        }
+
+        if (language != null && !language.isEmpty()) {
+            wrapper.eq(BookInfo::getLanguage, language);
+        }
+
+        if (year != null && !year.isEmpty()) {
+            if ("older".equals(year)) {
+                wrapper.lt(BookInfo::getPublishDate, java.time.LocalDate.of(2021, 1, 1));
+            } else {
+                try {
+                    int publishYear = Integer.parseInt(year);
+                    wrapper.ge(BookInfo::getPublishDate, java.time.LocalDate.of(publishYear, 1, 1))
+                            .lt(BookInfo::getPublishDate, java.time.LocalDate.of(publishYear + 1, 1, 1));
+                } catch (NumberFormatException e) {
+                    log.debug("忽略非法出版年份筛选: {}", year);
+                }
+            }
         }
         
         wrapper.orderByDesc(BookInfo::getCreatedAt);
@@ -107,6 +128,13 @@ public class BookService {
         book.setDeleted(0);
 
         bookInfoMapper.insert(book);
+        if (book.getId() == null) {
+            BookInfo savedBook = getByIsbn(book.getIsbn());
+            if (savedBook != null) {
+                book.setId(savedBook.getId());
+            }
+        }
+        createBookCopies(book, book.getTotalCopies());
         log.info("图书创建成功: id={}, title={}", book.getId(), book.getTitle());
         
         clearBookCache();
@@ -150,6 +178,23 @@ public class BookService {
         if (request.getLocation() != null) {
             book.setLocation(request.getLocation());
         }
+        if (request.getTotalCopies() != null) {
+            int oldTotal = book.getTotalCopies() != null ? book.getTotalCopies() : 0;
+            int oldAvailable = book.getAvailableCopies() != null ? book.getAvailableCopies() : 0;
+            int newTotal = Math.max(request.getTotalCopies(), 0);
+            int delta = newTotal - oldTotal;
+
+            book.setTotalCopies(newTotal);
+            book.setAvailableCopies(Math.max(oldAvailable + delta, 0));
+            if (delta > 0) {
+                createBookCopies(book, delta);
+            }
+            if (book.getAvailableCopies() == 0) {
+                book.setStatus(BOOK_STATUS_BORROWED);
+            } else if (BOOK_STATUS_BORROWED.equals(book.getStatus())) {
+                book.setStatus(BOOK_STATUS_AVAILABLE);
+            }
+        }
 
         book.setUpdatedAt(LocalDateTime.now());
         bookInfoMapper.updateById(book);
@@ -164,15 +209,13 @@ public class BookService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteBook(Long id) {
         BookInfo book = getById(id);
-        
-        if (BOOK_STATUS_BORROWED.equals(book.getStatus())) {
+
+        if (BOOK_STATUS_BORROWED.equals(book.getStatus()) || bookCopyMapper.countActiveBorrowsByBookId(id) > 0) {
             throw new BusinessException(ResultCode.BOOK_NOT_AVAILABLE, "该图书有未归还的借阅记录，无法删除");
         }
 
-        book.setDeleted(1);
-        book.setUpdatedAt(LocalDateTime.now());
-        bookInfoMapper.updateById(book);
-        
+        bookInfoMapper.deleteById(id);
+
         log.info("图书删除成功: id={}", id);
         clearBookCache();
         redisUtil.delete(REDIS_BOOK_DETAIL_KEY + id);
@@ -181,7 +224,8 @@ public class BookService {
     @Transactional(rollbackFor = Exception.class)
     public void updateStock(Long bookId, int change) {
         BookInfo book = getById(bookId);
-        int newAvailable = book.getAvailableCopies() + change;
+        int currentAvailable = book.getAvailableCopies() != null ? book.getAvailableCopies() : 0;
+        int newAvailable = currentAvailable + change;
         
         if (newAvailable < 0) {
             throw new BusinessException(ResultCode.BOOK_NOT_AVAILABLE);
@@ -203,6 +247,10 @@ public class BookService {
         redisUtil.delete(REDIS_BOOK_DETAIL_KEY + bookId);
     }
 
+    private static final Map<Long, String> CATEGORY_NAME_MAP = Map.of(
+        1L, "文学", 2L, "历史", 3L, "科技", 4L, "艺术", 5L, "教育", 6L, "其他"
+    );
+
     public BookResponse toBookResponse(BookInfo book) {
         BookResponse response = new BookResponse();
         response.setId(book.getId());
@@ -222,24 +270,124 @@ public class BookService {
         response.setStatus(book.getStatus());
         response.setLanguage(book.getLanguage());
         response.setLocation(book.getLocation());
+        response.setCategory(CATEGORY_NAME_MAP.getOrDefault(book.getCategoryId(), "其他"));
         response.setCreatedAt(book.getCreatedAt() != null ? book.getCreatedAt().toString() : null);
         return response;
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void decreaseStock(Long bookId, Long copyId) {
+        if (copyId != null) {
+            decreaseCopyStock(bookId, copyId);
+            return;
+        }
         updateStock(bookId, -1);
         if (copyId != null) {
-            updateCopyStatus(copyId, "borrowed");
+            try {
+                updateCopyStatus(copyId, COPY_STATUS_BORROWED);
+            } catch (Exception e) {
+                log.debug("副本状态更新跳过: copyId={}", copyId);
+            }
         }
+    }
+
+    private void decreaseCopyStock(Long bookId, Long copyId) {
+        int copyUpdated = bookCopyMapper.updateStatusIfCurrent(copyId, bookId, COPY_STATUS_AVAILABLE, COPY_STATUS_BORROWED);
+        if (copyUpdated <= 0) {
+            throw new BusinessException(ResultCode.BOOK_COPY_NOT_AVAILABLE);
+        }
+
+        int stockUpdated = bookInfoMapper.updateAvailableCopies(bookId, -1, BOOK_STATUS_AVAILABLE, BOOK_STATUS_BORROWED);
+        if (stockUpdated <= 0) {
+            throw new BusinessException(ResultCode.BOOK_NOT_AVAILABLE);
+        }
+
+        clearBookCache();
+        redisUtil.delete(REDIS_BOOK_DETAIL_KEY + bookId);
+    }
+
+    public BookCopy getAvailableCopyByBookId(Long bookId) {
+        BookCopy copy = bookCopyMapper.selectFirstAvailableByBookId(bookId);
+        if (copy == null) {
+            throw new BusinessException(ResultCode.NO_COPY_AVAILABLE);
+        }
+        return copy;
+    }
+
+    public BookCopy getCopyByBarcode(String barcode) {
+        if (barcode == null || barcode.isBlank()) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "图书条码不能为空");
+        }
+        BookCopy copy = bookCopyMapper.selectByBarcode(barcode.trim());
+        if (copy == null) {
+            throw new BusinessException(ResultCode.BOOK_COPY_NOT_FOUND, "未找到该图书副本条码");
+        }
+        return copy;
+    }
+
+    public ScanBookResponse scanBook(String code) {
+        if (code == null || code.isBlank()) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "请输入图书条码或ISBN");
+        }
+
+        String keyword = code.trim();
+        BookCopy copy = bookCopyMapper.selectByBarcode(keyword);
+        BookInfo book;
+        String inputType;
+
+        if (copy != null) {
+            book = getById(copy.getBookId());
+            inputType = "barcode";
+        } else {
+            book = getByIsbn(keyword);
+            if (book == null) {
+                Page<BookInfo> pageResult = pageBooks(1, 1, keyword, null, null, null, null);
+                book = pageResult.getRecords().isEmpty() ? null : pageResult.getRecords().get(0);
+            }
+            if (book == null) {
+                throw new BusinessException(ResultCode.BOOK_NOT_FOUND, "未找到该图书");
+            }
+            inputType = "isbn";
+            copy = bookCopyMapper.selectFirstAvailableByBookId(book.getId());
+        }
+
+        ScanBookResponse response = new ScanBookResponse();
+        response.setInputType(inputType);
+        response.setBook(toBookResponse(book));
+        response.setCopy(copy != null ? toCopyResponse(copy, book) : null);
+        response.setCopyAvailable(copy != null && COPY_STATUS_AVAILABLE.equals(copy.getStatus()));
+        return response;
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void increaseStock(Long bookId, Long copyId) {
+        if (copyId != null) {
+            increaseCopyStock(bookId, copyId);
+            return;
+        }
         updateStock(bookId, 1);
         if (copyId != null) {
-            updateCopyStatus(copyId, "available");
+            try {
+                updateCopyStatus(copyId, COPY_STATUS_AVAILABLE);
+            } catch (Exception e) {
+                log.debug("副本状态更新跳过: copyId={}", copyId);
+            }
         }
+    }
+
+    private void increaseCopyStock(Long bookId, Long copyId) {
+        int copyUpdated = bookCopyMapper.updateStatusIfCurrent(copyId, bookId, COPY_STATUS_BORROWED, COPY_STATUS_AVAILABLE);
+        if (copyUpdated <= 0) {
+            throw new BusinessException(ResultCode.BOOK_OPERATION_FAILED);
+        }
+
+        int stockUpdated = bookInfoMapper.updateAvailableCopies(bookId, 1, BOOK_STATUS_AVAILABLE, BOOK_STATUS_BORROWED);
+        if (stockUpdated <= 0) {
+            throw new BusinessException(ResultCode.BOOK_OPERATION_FAILED);
+        }
+
+        clearBookCache();
+        redisUtil.delete(REDIS_BOOK_DETAIL_KEY + bookId);
     }
 
     public BookCopy getCopyById(Long copyId) {
@@ -250,6 +398,22 @@ public class BookService {
         return copy;
     }
 
+    public CopyResponse toCopyResponse(BookCopy copy, BookInfo book) {
+        CopyResponse response = new CopyResponse();
+        response.setCopyId(copy.getCopyId());
+        response.setBookId(copy.getBookId());
+        response.setIsbn(book != null ? book.getIsbn() : null);
+        response.setBarcode(copy.getBarcode());
+        response.setStatus(copy.getStatus());
+        response.setLocationId(copy.getLocationId());
+        response.setCondition(copy.getBookCondition());
+        response.setStorageDate(copy.getCreatedAt() != null ? copy.getCreatedAt().toLocalDate().toString() : null);
+        if (book != null) {
+            response.setBookInfo(toBookResponse(book));
+        }
+        return response;
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public void updateCopyStatus(Long copyId, String status) {
         BookCopy copy = getCopyById(copyId);
@@ -258,5 +422,47 @@ public class BookService {
     }
 
     private void clearBookCache() {
+        try {
+            Set<String> keys = redisTemplate.keys(REDIS_BOOK_LIST_KEY + "*");
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+            }
+        } catch (Exception e) {
+            log.warn("清理图书列表缓存失败", e);
+        }
+    }
+
+    private void createBookCopies(BookInfo book, int count) {
+        if (count <= 0 || book.getId() == null) {
+            return;
+        }
+
+        Long locationId = resolveLocationId(book);
+        for (int i = 0; i < count; i++) {
+            BookCopy copy = new BookCopy();
+            copy.setBookId(book.getId());
+            copy.setBarcode("BC" + book.getId() + "-" + UUID.randomUUID().toString().substring(0, 8));
+            copy.setLocationId(locationId);
+            copy.setStatus(COPY_STATUS_AVAILABLE);
+            copy.setBookCondition("new");
+            copy.setDeleted(0);
+            copy.setCreatedAt(LocalDateTime.now());
+            copy.setUpdatedAt(LocalDateTime.now());
+            bookCopyMapper.insert(copy);
+        }
+    }
+
+    private Long resolveLocationId(BookInfo book) {
+        if (book.getLocation() != null && !book.getLocation().isBlank()) {
+            Long locationId = bookCopyMapper.selectLocationIdByName(book.getLocation());
+            if (locationId != null) {
+                return locationId;
+            }
+        }
+        Long fallbackLocationId = bookCopyMapper.selectFirstLocationId();
+        if (fallbackLocationId == null) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "请先初始化馆藏位置数据");
+        }
+        return fallbackLocationId;
     }
 }

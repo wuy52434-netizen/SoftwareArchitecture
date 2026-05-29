@@ -20,6 +20,10 @@
 
 ## 基础信息
 
+### 答辩主线说明
+
+答辩演示以自助借书机为主，浏览器访问 `http://localhost` 时地址栏保持根路径，页面直接渲染借书机首页。读者门户 `/portal` 仍保留，但不作为主演示页面。
+
 ### 基础 URL
 
 | 环境 | 地址 |
@@ -27,6 +31,20 @@
 | 开发环境 | http://localhost:8080/api |
 | 测试环境 | http://test-api.example.com/api |
 | 生产环境 | https://api.example.com/api |
+
+### 自助借书机核心接口
+
+| 接口 | 方法 | 作用 | 关键参数 |
+|------|------|------|----------|
+| `/books/scan` | GET | 借书机扫码查询图书，支持 ISBN 或实体副本条码 | `code` |
+| `/books/copy/{copyId}` | GET | 根据实体副本 ID 查询图书副本 | `copyId` |
+| `/books/copy/barcode/{barcode}` | GET | 根据条码查询实体副本 | `barcode` |
+| `/books/{id}/available-copy` | GET | 根据图书 ID 获取一册可借副本 | `id` |
+| `/borrow` | POST | 借书，写入借阅记录并扣减副本库存 | `bookId`, `copyId`, `userId` |
+| `/return` | POST | 还书，恢复副本状态并计算逾期金额 | `borrowId` 或 `bookId` |
+| `/my-borrows` | GET | 查询读者借阅记录 | `userId`, `status` |
+
+借书机必须传递实体副本信息。`book_info.isbn` 只表示书目，`book_copy.copy_id` 和 `book_copy.barcode` 才能表示实际借出的那一册书。
 
 ### 通用请求头
 

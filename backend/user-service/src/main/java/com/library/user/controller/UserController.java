@@ -1,6 +1,5 @@
 package com.library.user.controller;
 
-import com.library.common.result.PageResult;
 import com.library.common.result.Result;
 import com.library.user.dto.UserDTO.*;
 import com.library.user.entity.User;
@@ -36,7 +35,7 @@ public class UserController {
 
     @Operation(summary = "根据ID获取用户")
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.userId")
+    @PreAuthorize("hasRole('ADMIN') or #id == principal.userId")
     public Result<UserResponse> getUserById(@PathVariable Long id) {
         User user = userService.getById(id);
         return Result.success(userService.toUserResponse(user));
@@ -52,7 +51,7 @@ public class UserController {
 
     @Operation(summary = "更新用户信息")
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.userId")
+    @PreAuthorize("hasRole('ADMIN') or #id == principal.userId")
     public Result<UserResponse> updateUser(
             @PathVariable Long id, 
             @Valid @RequestBody UpdateRequest request) {
@@ -71,15 +70,31 @@ public class UserController {
     @Operation(summary = "更新用户借阅数量")
     @PutMapping("/{id}/borrow-count")
     public Result<Void> updateBorrowCount(@PathVariable Long id, @RequestParam Integer delta) {
+        userService.getById(id);
         return Result.success();
+    }
+
+    @Operation(summary = "内部服务获取用户信息")
+    @GetMapping("/internal/{id}")
+    public Result<UserResponse> getInternalUserById(@PathVariable Long id) {
+        User user = userService.getById(id);
+        return Result.success(userService.toUserResponse(user));
     }
 
     @Operation(summary = "更新用户状态")
     @PutMapping("/{id}/status")
     public Result<Void> updateUserStatus(@PathVariable Long id, @RequestParam String status) {
-        User user = userService.getById(id);
-        user.setStatus(status);
-        userService.update(id, new UpdateRequest());
+        userService.updateStatus(id, status);
         return Result.success();
+    }
+
+    @Operation(summary = "通过读者证号验证身份（自助终端）")
+    @GetMapping("/card/{cardNo}")
+    public Result<UserResponse> getUserByCard(@PathVariable String cardNo) {
+        User user = userService.getByCardNo(cardNo);
+        if (user == null) {
+            return Result.error(404, "读者证号无效");
+        }
+        return Result.success(userService.toUserResponse(user));
     }
 }

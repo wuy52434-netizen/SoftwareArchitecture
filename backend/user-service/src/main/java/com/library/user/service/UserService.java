@@ -36,6 +36,19 @@ public class UserService {
         return userMapper.selectByUsername(username);
     }
 
+    public User getByCardNo(String cardNo) {
+        // 支持用户名或用户ID查询
+        User user = userMapper.selectByUsername(cardNo);
+        if (user == null) {
+            try {
+                Long userId = Long.parseLong(cardNo);
+                user = userMapper.selectById(userId);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return user;
+    }
+
     public List<User> listAll() {
         return userMapper.selectList(
                 new LambdaQueryWrapper<User>()
@@ -75,6 +88,9 @@ public class UserService {
         if (request.getRealName() != null) {
             user.setRealName(request.getRealName());
         }
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
         if (request.getPhone() != null) {
             user.setPhone(request.getPhone());
         }
@@ -83,6 +99,12 @@ public class UserService {
         }
         if (request.getGender() != null) {
             user.setGender(request.getGender());
+        }
+        if (request.getUserType() != null && !request.getUserType().isBlank()) {
+            user.setUserType(request.getUserType());
+        }
+        if (request.getStatus() != null && !request.getStatus().isBlank()) {
+            user.setStatus(request.getStatus());
         }
         user.setUpdatedAt(LocalDateTime.now());
 
@@ -111,6 +133,19 @@ public class UserService {
         userMapper.updateById(user);
     }
 
+    public void updateStatus(Long userId, String status) {
+        if (status == null || status.isBlank()) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "用户状态不能为空");
+        }
+        UpdateRequest request = new UpdateRequest();
+        request.setStatus(status);
+        update(userId, request);
+    }
+
+    public int countActiveBorrows(Long userId) {
+        return userMapper.countActiveBorrows(userId);
+    }
+
     public UserResponse toUserResponse(User user) {
         UserResponse response = new UserResponse();
         response.setUserId(user.getUserId());
@@ -121,6 +156,8 @@ public class UserService {
         response.setPhone(user.getPhone());
         response.setEmail(user.getEmail());
         response.setStatus(user.getStatus());
+        response.setMaxBorrowCount(5);
+        response.setCurrentBorrowCount(countActiveBorrows(user.getUserId()));
         response.setLastLoginTime(user.getLastLoginTime() != null ? user.getLastLoginTime().toString() : null);
         response.setCreatedAt(user.getCreatedAt() != null ? user.getCreatedAt().toString() : null);
         return response;

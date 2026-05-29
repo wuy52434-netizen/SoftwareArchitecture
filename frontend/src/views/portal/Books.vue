@@ -102,7 +102,7 @@
             </span>
           </div>
           <div class="book-stock">
-            库存：<span class="stock-number">{{ book.available_copies || book.stock || 0 }}</span>
+            库存：<span class="stock-number">{{ getStock(book) }}</span>
           </div>
           <div class="book-actions">
             <el-button type="default" size="small" @click.stop="viewBookDetail(book)">
@@ -163,7 +163,7 @@
                 {{ getStatusText(selectedBook) }}
               </el-tag>
             </p>
-            <p><span>库存：</span>{{ selectedBook.available_copies || selectedBook.stock || 0 }} 本</p>
+            <p><span>库存：</span>{{ getStock(selectedBook) }} 本</p>
             <p><span>位置：</span>{{ selectedBook.location || '暂无位置信息' }}</p>
           </div>
           <div class="detail-description" v-if="selectedBook.description">
@@ -207,7 +207,7 @@
                 <h4>{{ selectedBook.title }}</h4>
                 <p>作者：{{ selectedBook.author }}</p>
                 <p>ISBN：{{ selectedBook.isbn }}</p>
-                <p>可借数量：{{ selectedBook.available_copies || selectedBook.stock || 0 }} 本</p>
+                <p>可借数量：{{ getStock(selectedBook) }} 本</p>
               </div>
             </div>
           </div>
@@ -317,12 +317,16 @@ let defaultBorrowDays = 30
 onMounted(async () => {
   await loadSettings()
   await loadBooks()
-  
+
   if (route.query.bookId && route.query.borrow === '1') {
     const bookId = parseInt(route.query.bookId)
-    const response = await booksApi.getBook(bookId)
-    if (response.ok && response.book) {
-      openBorrowModalWithBook(response.book)
+    try {
+      const book = await booksApi.getBook(bookId)
+      if (book && book.id) {
+        openBorrowModalWithBook(book)
+      }
+    } catch (e) {
+      console.error('获取图书详情失败:', e)
     }
   }
 })
@@ -330,9 +334,13 @@ onMounted(async () => {
 watch(() => route.query, async (query) => {
   if (query.bookId && query.borrow === '1') {
     const bookId = parseInt(query.bookId)
-    const response = await booksApi.getBook(bookId)
-    if (response.ok && response.book) {
-      openBorrowModalWithBook(response.book)
+    try {
+      const book = await booksApi.getBook(bookId)
+      if (book && book.id) {
+        openBorrowModalWithBook(book)
+      }
+    } catch (e) {
+      console.error('获取图书详情失败:', e)
     }
   }
 })
@@ -340,8 +348,8 @@ watch(() => route.query, async (query) => {
 async function loadSettings() {
   try {
     const response = await settingsApi.getSettings()
-    if (response.ok && response.settings) {
-      defaultBorrowDays = parseInt(response.settings.default_borrow_days) || 30
+    if (response && response.borrowDays) {
+      defaultBorrowDays = parseInt(response.borrowDays) || 30
     }
   } catch (error) {
     console.error('加载系统设置失败:', error)
@@ -352,9 +360,9 @@ async function loadBooks() {
   loading.value = true
   try {
     const response = await booksApi.getBooks(searchForm)
-    books.value = response.books || []
-    pagination.total = response.pagination?.total || 0
-    pagination.pages = response.pagination?.pages || 0
+    books.value = response.records || response.books || []
+    pagination.total = response.total || response.pagination?.total || 0
+    pagination.pages = response.pages || response.pagination?.pages || 0
   } catch (error) {
     ElMessage.error('加载图书列表失败')
     console.error('加载图书列表失败:', error)
@@ -373,10 +381,14 @@ function getCoverImage(book) {
 }
 
 function getStockStatus(book) {
-  const stock = book.available_copies || book.stock || 0
+  const stock = getStock(book)
   if (stock === 0) return 'out'
   if (stock <= 3) return 'low'
   return 'available'
+}
+
+function getStock(book) {
+  return book?.availableCopies ?? book?.available_copies ?? book?.stock ?? 0
 }
 
 function getStockText(book) {
@@ -451,8 +463,8 @@ function openBorrowModalWithBook(book) {
   
   const user = authStore.user
   if (user) {
-    borrowForm.readerId = user.user_id || user.id || ''
-    borrowForm.readerName = user.name || user.real_name || user.username || ''
+    borrowForm.readerId = user.userId || user.user_id || user.id || ''
+    borrowForm.readerName = user.realName || user.name || user.real_name || user.username || ''
   }
   
   borrowForm.note = '我爱软件工程'
@@ -496,22 +508,19 @@ async function submitBorrow() {
     
     borrowLoading.value = true
     try {
-      const response = await borrowsApi.borrowBook({
-        book_id: borrowForm.bookId,
-        reader_id: borrowForm.readerId,
-        reader_name: borrowForm.readerName,
-        borrow_date: borrowForm.borrowDate,
-        due_date: borrowForm.returnDate,
-        note: borrowForm.note ? `${borrowForm.note} - 我爱软件工程` : '我爱软件工程'
+      await borrowsApi.borrowBook({
+        bookId: borrowForm.bookId,
+        userId: authStore.user?.userId || authStore.user?.id,
+        borrowDate: borrowForm.borrowDate,
+        dueDate: borrowForm.returnDate,
+        readerId: borrowForm.readerId,
+        readerName: borrowForm.readerName,
+        note: borrowForm.note
       })
-      
-      if (response.ok) {
-        ElMessage.success(`《${selectedBook.value.title}》借阅成功！`)
-        borrowDialogVisible.value = false
-        loadBooks()
-      } else {
-        throw new Error(response.error || '借阅失败')
-      }
+
+      ElMessage.success(`《${selectedBook.value.title}》借阅成功！`)
+      borrowDialogVisible.value = false
+      loadBooks()
     } catch (error) {
       ElMessage.error(error.message || '借阅失败，请重试')
     } finally {

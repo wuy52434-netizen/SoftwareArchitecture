@@ -177,6 +177,13 @@
             <el-icon><Download /></el-icon>
             导出数据
           </el-button>
+          <input
+            ref="importFileRef"
+            type="file"
+            accept="application/json"
+            style="display: none"
+            @change="handleImportFile"
+          />
           <el-button type="warning" size="large" @click="importData">
             <el-icon><Upload /></el-icon>
             导入数据
@@ -208,6 +215,7 @@ import * as settingsApi from '@/api/settings'
 
 const submitLoading = ref(false)
 const settingsFormRef = ref(null)
+const importFileRef = ref(null)
 
 const defaultSettings = {
   default_borrow_days: 30,
@@ -246,8 +254,13 @@ onMounted(() => {
 async function loadSettings() {
   try {
     const response = await settingsApi.getSettings()
-    if (response.ok && response.settings) {
-      Object.assign(settingsForm, response.settings)
+    if (response) {
+      settingsForm.default_borrow_days = response.borrowDays || 30
+      settingsForm.max_borrow_count = response.maxBorrowCount || 5
+      settingsForm.max_renewal_times = response.maxRenewalTimes || 1
+      settingsForm.overdue_fine_per_day = parseFloat(response.overdueFinePerDay) || 0.5
+      settingsForm.max_fine_amount = parseFloat(response.maxFineAmount) || 50
+      settingsForm.reminder_days_before_due = response.reminderDaysBeforeDue || 3
     }
   } catch (error) {
     console.error('加载系统设置失败:', error)
@@ -262,12 +275,15 @@ async function saveSettings() {
 
     submitLoading.value = true
     try {
-      const response = await settingsApi.updateSettings(settingsForm)
-      if (response.ok) {
-        ElMessage.success('设置保存成功')
-      } else {
-        throw new Error(response.error || '保存失败')
-      }
+      await settingsApi.updateSettings({
+        borrowDays: settingsForm.default_borrow_days,
+        maxBorrowCount: settingsForm.max_borrow_count,
+        maxRenewalTimes: settingsForm.max_renewal_times,
+        overdueFinePerDay: settingsForm.overdue_fine_per_day,
+        maxFineAmount: settingsForm.max_fine_amount,
+        reminderDaysBeforeDue: settingsForm.reminder_days_before_due
+      })
+      ElMessage.success('设置保存成功')
     } catch (error) {
       ElMessage.error(error.message || '保存失败，请重试')
     } finally {
@@ -292,17 +308,54 @@ async function resetSettings() {
 }
 
 function exportData() {
-  ElMessage.info('数据导出功能开发中...')
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    type: 'library-system-settings',
+    version: '1.0.0',
+    settings: { ...settingsForm }
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `library-settings-${new Date().toISOString().slice(0, 10)}.json`
+  link.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success('设置数据已导出')
 }
 
 function importData() {
-  ElMessage.info('数据导入功能开发中...')
+  importFileRef.value?.click()
+}
+
+function handleImportFile(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = async () => {
+    try {
+      const payload = JSON.parse(String(reader.result || '{}'))
+      const importedSettings = payload.settings || payload
+      Object.assign(settingsForm, {
+        ...settingsForm,
+        ...importedSettings
+      })
+      await saveSettings()
+      ElMessage.success('设置数据已导入')
+    } catch (error) {
+      ElMessage.error('导入失败，请选择有效的 JSON 文件')
+    } finally {
+      event.target.value = ''
+    }
+  }
+  reader.readAsText(file, 'utf-8')
 }
 
 async function clearData() {
   await ElMessageBox.confirm(
-    '此操作将清空所有数据，包括图书信息、用户信息和借阅记录。此操作不可恢复！确定要继续吗？',
-    '危险操作',
+    '此操作将清除当前浏览器登录态和缓存，并把借阅规则重置为默认值。确定要继续吗？',
+    '清理本地数据',
     {
       confirmButtonText: '确定清空',
       cancelButtonText: '取消',
@@ -311,7 +364,19 @@ async function clearData() {
     }
   )
 
-  ElMessage.info('数据清空功能开发中...')
+  Object.assign(settingsForm, defaultSettings)
+  await settingsApi.updateSettings({
+    borrowDays: settingsForm.default_borrow_days,
+    maxBorrowCount: settingsForm.max_borrow_count,
+    maxRenewalTimes: settingsForm.max_renewal_times,
+    overdueFinePerDay: settingsForm.overdue_fine_per_day,
+    maxFineAmount: settingsForm.max_fine_amount,
+    reminderDaysBeforeDue: settingsForm.reminder_days_before_due
+  })
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('refreshToken')
+  localStorage.removeItem('currentUser')
+  ElMessage.success('本地数据已清理，系统设置已重置')
 }
 </script>
 

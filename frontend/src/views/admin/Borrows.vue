@@ -363,9 +363,9 @@ onMounted(async () => {
 async function loadSettings() {
   try {
     const response = await settingsApi.getSettings()
-    if (response.ok && response.settings) {
-      settings.overdue_fine_per_day = parseFloat(response.settings.overdue_fine_per_day) || 0.5
-      settings.max_fine_amount = parseFloat(response.settings.max_fine_amount) || 50
+    if (response) {
+      settings.overdue_fine_per_day = parseFloat(response.overdueFinePerDay) || 0.5
+      settings.max_fine_amount = parseFloat(response.maxFineAmount) || 50
     }
   } catch (error) {
     console.error('加载系统设置失败:', error)
@@ -375,7 +375,7 @@ async function loadSettings() {
 async function loadBooks() {
   try {
     const response = await booksApi.getBooks({ perPage: 100 })
-    bookOptions.value = response.books || []
+    bookOptions.value = response.records || response.books || []
   } catch (error) {
     console.error('加载图书列表失败:', error)
   }
@@ -384,8 +384,31 @@ async function loadBooks() {
 async function loadBorrows() {
   loading.value = true
   try {
-    const response = await borrowsApi.getAllBorrows()
-    let data = response.borrows || []
+    const response = await borrowsApi.getAllBorrows({
+      page: searchForm.page,
+      perPage: searchForm.perPage,
+      bookId: searchForm.bookId,
+      status: searchForm.status
+    })
+
+    let data = response.records || response.borrows || []
+
+    // 映射后端字段到前端展示字段
+    data = data.map(item => ({
+      id: item.recordId,
+      book_id: item.bookId,
+      book_title: item.bookTitle || '未知图书',
+      book_author: item.bookAuthor || '',
+      book_cover_url: item.bookCoverUrl,
+      reader_name: item.readerName || '读者' + item.userId,
+      reader_id: item.readerId || String(item.userId),
+      borrow_date: item.borrowDate,
+      due_date: item.dueDate,
+      return_date: item.returnDate,
+      status: item.status,
+      fine_amount: item.fineAmount,
+      note: item.remark
+    }))
 
     if (searchForm.keyword) {
       const keyword = searchForm.keyword.toLowerCase()
@@ -397,29 +420,9 @@ async function loadBorrows() {
       )
     }
 
-    if (searchForm.bookId) {
-      data = data.filter(b => b.book_id === searchForm.bookId)
-    }
-
-    if (searchForm.status) {
-      switch (searchForm.status) {
-        case 'active':
-          data = data.filter(b => !b.return_date)
-          break
-        case 'returned':
-          data = data.filter(b => b.return_date)
-          break
-        case 'overdue':
-          data = data.filter(b => !b.return_date && isOverdue(b))
-          break
-      }
-    }
-
-    pagination.total = data.length
-
-    const start = (searchForm.page - 1) * searchForm.perPage
-    const end = start + searchForm.perPage
-    borrows.value = data.slice(start, end)
+    pagination.total = response.total || data.length
+    pagination.pages = response.pages || Math.ceil(pagination.total / searchForm.perPage)
+    borrows.value = data
   } catch (error) {
     ElMessage.error('加载借阅记录失败')
     console.error('加载借阅记录失败:', error)
@@ -509,21 +512,13 @@ async function confirmReturn() {
 
   returnLoading.value = true
   try {
-    const response = await borrowsApi.returnBook({
-      borrow_id: borrow.id
+    await borrowsApi.returnBook({
+      borrowId: borrow.id
     })
 
-    if (response.ok) {
-      let successMessage = '归还成功！'
-      if (response.overdue_days > 0) {
-        successMessage = `归还成功！逾期 ${response.overdue_days} 天，罚款 ¥${response.fine_amount.toFixed(2)}`
-      }
-      ElMessage.success(successMessage)
-      returnDialogVisible.value = false
-      loadBorrows()
-    } else {
-      throw new Error(response.error || '归还失败')
-    }
+    ElMessage.success('归还成功！')
+    returnDialogVisible.value = false
+    loadBorrows()
   } catch (error) {
     ElMessage.error(error.message || '归还失败')
   } finally {

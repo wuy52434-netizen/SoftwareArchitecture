@@ -46,4 +46,7 @@ public class BorrowRecord implements Serializable {
 
     @TableLogic
     private Integer deleted;
+
+    @TableField(exist = false)
+    private String bookTitle;
 }

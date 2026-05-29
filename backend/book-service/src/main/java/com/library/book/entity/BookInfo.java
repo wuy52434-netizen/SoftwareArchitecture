@@ -1,6 +1,7 @@
 package com.library.book.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -31,6 +32,7 @@ public class BookInfo implements Serializable {
 
     private String summary;
 
+    @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate publishDate;
 
     private String coverUrl;

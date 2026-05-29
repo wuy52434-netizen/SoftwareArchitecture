@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
@@ -21,7 +22,8 @@ public class NotifyConsumerService {
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy年MM月dd日");
 
     @RabbitListener(queues = RabbitMQConfig.BORROW_SUCCESS_QUEUE)
-    public void handleBorrowSuccess(BorrowEvent event) {
+    public void handleBorrowSuccess(Map<String, Object> message) {
+        BorrowEvent event = toBorrowEvent(message);
         log.info("处理借书成功事件: userId={}, bookTitle={}", event.getUserId(), event.getBookTitle());
 
         try {
@@ -68,7 +70,8 @@ public class NotifyConsumerService {
     }
 
     @RabbitListener(queues = RabbitMQConfig.RETURN_SUCCESS_QUEUE)
-    public void handleReturnSuccess(BorrowEvent event) {
+    public void handleReturnSuccess(Map<String, Object> message) {
+        BorrowEvent event = toBorrowEvent(message);
         log.info("处理还书成功事件: userId={}, bookTitle={}", event.getUserId(), event.getBookTitle());
 
         try {
@@ -103,9 +106,41 @@ public class NotifyConsumerService {
     }
 
     @RabbitListener(queues = RabbitMQConfig.BORROW_FAIL_QUEUE)
-    public void handleBorrowFail(BorrowEvent event) {
+    public void handleBorrowFail(Map<String, Object> message) {
+        BorrowEvent event = toBorrowEvent(message);
         log.warn("处理借书失败事件: userId={}, bookTitle={}, reason={}",
                 event.getUserId(), event.getBookTitle(), event.getFailReason());
+    }
+
+    private BorrowEvent toBorrowEvent(Map<String, Object> message) {
+        BorrowEvent event = new BorrowEvent();
+        event.setUserId(toLong(message.get("userId")));
+        event.setBookId(toLong(message.get("bookId")));
+        event.setRecordId(toLong(message.get("recordId")));
+        event.setBookTitle(String.valueOf(message.getOrDefault("bookTitle", "未知图书")));
+        event.setBorrowDate(toDate(message.get("borrowDate")));
+        event.setDueDate(toDate(message.get("dueDate")));
+        event.setReturnDate(toDate(message.get("returnDate")));
+        event.setUsername(String.valueOf(message.getOrDefault("username", "读者")));
+        return event;
+    }
+
+    private Long toLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private LocalDate toDate(Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(String.valueOf(value));
     }
 
     private String buildBorrowSuccessEmailContent(BorrowEvent event) {

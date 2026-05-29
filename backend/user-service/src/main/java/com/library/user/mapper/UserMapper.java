@@ -14,4 +14,7 @@ public interface UserMapper extends BaseMapper<User> {
 
     @Select("SELECT * FROM user WHERE user_id = #{userId} AND deleted = 0")
     User selectById(@Param("userId") Long userId);
+
+    @Select("SELECT COUNT(*) FROM borrow_record WHERE user_id = #{userId} AND return_date IS NULL AND deleted = 0")
+    int countActiveBorrows(@Param("userId") Long userId);
 }

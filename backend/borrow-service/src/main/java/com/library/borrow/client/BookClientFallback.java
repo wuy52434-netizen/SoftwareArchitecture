@@ -15,13 +15,13 @@ public class BookClientFallback implements BookClient {
     }
 
     @Override
-    public Result<BookCopy> decreaseStock(Long id, Long copyId) {
+    public Result<Void> decreaseStock(Long id, Long copyId) {
         log.warn("图书服务降级 - decreaseStock: id={}, copyId={}", id, copyId);
         return Result.error(500, "图书服务暂时不可用");
     }
 
     @Override
-    public Result<BookCopy> increaseStock(Long id, Long copyId) {
+    public Result<Void> increaseStock(Long id, Long copyId) {
         log.warn("图书服务降级 - increaseStock: id={}, copyId={}", id, copyId);
         return Result.error(500, "图书服务暂时不可用");
     }
@@ -29,6 +29,12 @@ public class BookClientFallback implements BookClient {
     @Override
     public Result<BookCopy> getCopyById(Long copyId) {
         log.warn("图书服务降级 - getCopyById: copyId={}", copyId);
+        return Result.error(500, "图书服务暂时不可用");
+    }
+
+    @Override
+    public Result<BookCopy> getAvailableCopy(Long id) {
+        log.warn("图书服务降级 - getAvailableCopy: id={}", id);
         return Result.error(500, "图书服务暂时不可用");
     }
 

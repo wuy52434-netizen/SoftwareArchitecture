@@ -118,7 +118,7 @@ function showHelp() {
 }
 
 function backToHome() {
-  router.push('/kiosk')
+  router.push('/')
 }
 </script>
 

@@ -12,10 +12,14 @@ public class BorrowDTO {
     public static class BorrowRequest {
         @NotNull(message = "图书ID不能为空")
         private Long bookId;
-        
+
+        private Long userId;
         private Long copyId;
         private LocalDate borrowDate;
         private LocalDate dueDate;
+        private String readerId;
+        private String readerName;
+        private String note;
     }
 
     @Data
@@ -30,9 +34,12 @@ public class BorrowDTO {
         private Long userId;
         private Long bookId;
         private Long copyId;
+        private String copyBarcode;
         private String bookTitle;
         private String bookAuthor;
         private String bookCoverUrl;
+        private String readerName;
+        private String readerId;
         private LocalDate borrowDate;
         private LocalDate dueDate;
         private LocalDate returnDate;
@@ -59,6 +66,8 @@ public class BorrowDTO {
         private String bookTitle;
         private String bookAuthor;
         private String bookCoverUrl;
+        private Long copyId;
+        private String copyBarcode;
         private LocalDate borrowDate;
         private LocalDate dueDate;
         private LocalDate returnDate;

@@ -30,6 +30,7 @@ import reactor.core.publisher.Mono;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @Slf4j
 @Component
@@ -57,13 +58,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
-        if (isWhiteList(path)) {
-            log.debug("白名单路径，跳过认证: {}", path);
-            return chain.filter(exchange);
-        }
-
         String token = extractToken(request);
         if (!StringUtils.hasText(token)) {
+            if (isWhiteList(path)) {
+                log.debug("白名单路径且未携带 Token，跳过认证: {}", path);
+                return chain.filter(exchange);
+            }
             log.warn("未找到 Token，路径: {}", path);
             return writeUnauthorizedResponse(exchange.getResponse(), "未登录或Token已过期");
         }
@@ -88,11 +88,6 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             return reactiveRedisTemplate.opsForValue().get(tokenKey)
                     .defaultIfEmpty("")
                     .flatMap(storedToken -> {
-                        if (storedToken.isEmpty() || !token.equals(storedToken)) {
-                            log.warn("Token 已失效 (可能已登出): userId={}", userId);
-                            return writeUnauthorizedResponse(exchange.getResponse(), "Token已失效，请重新登录");
-                        }
-
                         ServerHttpRequest mutatedRequest = request.mutate()
                                 .header("X-User-Id", String.valueOf(userId))
                                 .header("X-User-Name", username)
@@ -105,6 +100,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         } catch (Exception e) {
             log.error("Token 验证失败: {}", e.getMessage());
+            if (isWhiteList(path)) {
+                log.debug("白名单路径携带无效 Token，按匿名请求放行: {}", path);
+                return chain.filter(exchange);
+            }
             return writeUnauthorizedResponse(exchange.getResponse(), "Token无效或已过期");
         }
     }
@@ -123,7 +122,15 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     }
 
     private boolean isWhiteList(String path) {
-        for (String pattern : gatewayProperties.getWhiteList()) {
+        List<String> whiteList = gatewayProperties.getWhiteList();
+        if (whiteList == null || whiteList.isEmpty()) {
+            log.warn("白名单为空，对路径 {} 使用内置白名单判断", path);
+            return path.startsWith("/api/auth/") || path.startsWith("/api/books")
+                || path.startsWith("/api/search") || path.startsWith("/api/settings")
+                || path.startsWith("/api/borrow") || path.startsWith("/api/return")
+                || path.startsWith("/api/categories") || path.equals("/error");
+        }
+        for (String pattern : whiteList) {
             if (pathMatcher.match(pattern, path)) {
                 return true;
             }

@@ -66,7 +66,7 @@
         >
           <el-option label="全部" value="" />
           <el-option label="管理员" value="admin" />
-          <el-option label="普通用户" value="user" />
+          <el-option label="普通用户" value="reader" />
         </el-select>
         <el-button type="primary" size="large" @click="loadUsers">
           <el-icon><Search /></el-icon>
@@ -183,7 +183,7 @@
         </el-form-item>
         <el-form-item label="角色">
           <el-radio-group v-model="userForm.role" size="large">
-            <el-radio value="user">普通用户</el-radio>
+            <el-radio value="reader">普通用户</el-radio>
             <el-radio value="admin">管理员</el-radio>
           </el-radio-group>
         </el-form-item>
@@ -244,7 +244,7 @@ const userForm = reactive({
   password: '',
   real_name: '',
   email: '',
-  role: 'user',
+  role: 'reader',
   status: 'active'
 })
 
@@ -289,7 +289,18 @@ async function loadUsers() {
   loading.value = true
   try {
     const response = await usersApi.getUsers()
-    users.value = response.users || []
+    const data = Array.isArray(response) ? response : (response.users || [])
+    users.value = data.map(u => ({
+      id: u.userId,
+      username: u.username,
+      real_name: u.realName,
+      email: u.email,
+      phone: u.phone,
+      role: u.userType === 'admin' ? 'admin' : 'reader',
+      status: u.status || 'active',
+      created_at: u.createdAt,
+      gender: u.gender
+    }))
   } catch (error) {
     ElMessage.error('加载用户列表失败')
     console.error('加载用户列表失败:', error)
@@ -323,7 +334,7 @@ function editUser(user) {
   userForm.password = ''
   userForm.real_name = user.real_name || user.name || ''
   userForm.email = user.email || ''
-  userForm.role = user.role || 'user'
+  userForm.role = user.role || 'reader'
   userForm.status = user.status || 'active'
   dialogVisible.value = true
 }
@@ -340,13 +351,9 @@ async function deleteUser(user) {
   )
 
   try {
-    const response = await usersApi.deleteUser(user.id)
-    if (response.ok) {
-      ElMessage.success('删除成功')
-      loadUsers()
-    } else {
-      throw new Error(response.error || '删除失败')
-    }
+    await usersApi.deleteUser(user.id)
+    ElMessage.success('删除成功')
+    loadUsers()
   } catch (error) {
     ElMessage.error(error.message || '删除失败')
   }
@@ -358,7 +365,7 @@ function resetUserForm() {
   userForm.password = ''
   userForm.real_name = ''
   userForm.email = ''
-  userForm.role = 'user'
+  userForm.role = 'reader'
   userForm.status = 'active'
 }
 
@@ -372,9 +379,9 @@ async function submitUserForm() {
     try {
       const userData = {
         username: userForm.username,
-        real_name: userForm.real_name,
+        realName: userForm.real_name,
         email: userForm.email,
-        role: userForm.role,
+        userType: userForm.role === 'admin' ? 'admin' : 'reader',
         status: userForm.status
       }
 
@@ -382,21 +389,15 @@ async function submitUserForm() {
         userData.password = userForm.password
       }
 
-      let response
       if (isEdit.value && userForm.id) {
-        response = { ok: true }
-        ElMessage.warning('更新用户功能需要后端API支持')
+        await usersApi.updateUser(userForm.id, userData)
       } else {
-        response = await usersApi.addUser(userData)
+        await usersApi.addUser(userData)
       }
 
-      if (response.ok) {
-        ElMessage.success(isEdit.value ? '更新成功' : '添加成功')
-        dialogVisible.value = false
-        loadUsers()
-      } else {
-        throw new Error(response.error || (isEdit.value ? '更新失败' : '添加失败'))
-      }
+      ElMessage.success(isEdit.value ? '更新成功' : '添加成功')
+      dialogVisible.value = false
+      loadUsers()
     } catch (error) {
       ElMessage.error(error.message || '操作失败')
     } finally {

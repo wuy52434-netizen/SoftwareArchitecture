@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 @FeignClient(name = "user-service", fallback = UserClientFallback.class)
 public interface UserClient {
 
-    @GetMapping("/api/users/{id}")
+    @GetMapping("/api/users/internal/{id}")
     Result<UserInfo> getUserById(@PathVariable Long id);
 
     @GetMapping("/api/users/current")
@@ -21,7 +21,9 @@ public interface UserClient {
 
     class UserInfo {
         private Long id;
+        private Long userId;
         private String username;
+        private String realName;
         private String email;
         private String phone;
         private String status;
@@ -29,10 +31,14 @@ public interface UserClient {
         private Integer activeBorrowCount;
         private Integer maxBorrowCount;
 
-        public Long getId() { return id; }
+        public Long getId() { return id != null ? id : userId; }
         public void setId(Long id) { this.id = id; }
+        public Long getUserId() { return userId; }
+        public void setUserId(Long userId) { this.userId = userId; }
         public String getUsername() { return username; }
         public void setUsername(String username) { this.username = username; }
+        public String getRealName() { return realName; }
+        public void setRealName(String realName) { this.realName = realName; }
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
         public String getPhone() { return phone; }
