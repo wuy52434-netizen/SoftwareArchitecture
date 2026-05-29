@@ -141,3 +141,7 @@ ENV/
 Thumbs.db
 __MACOSX/
 .DS_Store
+
+# JMeter generated reports/results
+demo/jmeter/run-*/
+demo/jmeter/*.jtl

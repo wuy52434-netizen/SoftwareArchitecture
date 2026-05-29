@@ -139,23 +139,21 @@ function redirectToDashboard() {
   if (authStore.isAdmin) {
     router.push('/admin')
   } else {
-    router.push('/portal')
+    router.push('/')
   }
 }
 
 async function handleLogin() {
   if (!loginFormRef.value) return
-  
+
   await loginFormRef.value.validate(async (valid) => {
     if (!valid) return
-    
+
     loading.value = true
     try {
-      const response = await authStore.login(loginForm.username, loginForm.password)
-      if (response.ok) {
-        ElMessage.success('登录成功')
-        redirectToDashboard()
-      }
+      await authStore.login(loginForm.username, loginForm.password)
+      ElMessage.success('登录成功')
+      redirectToDashboard()
     } catch (error) {
       ElMessage.error(error.message || '登录失败，请检查用户名和密码')
     } finally {
@@ -175,7 +173,7 @@ function quickLogin(type) {
 }
 
 function goToKiosk() {
-  router.push('/kiosk')
+  router.push('/')
 }
 </script>
 

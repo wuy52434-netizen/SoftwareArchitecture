@@ -18,6 +18,8 @@ public class BorrowRecord implements Serializable {
 
     private Long userId;
 
+    private Long bookId;
+
     private Long copyId;
 
     private LocalDate borrowDate;
@@ -44,4 +46,7 @@ public class BorrowRecord implements Serializable {
 
     @TableLogic
     private Integer deleted;
+
+    @TableField(exist = false)
+    private String bookTitle;
 }

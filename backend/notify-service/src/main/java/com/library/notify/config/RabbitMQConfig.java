@@ -11,9 +11,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMQConfig {
 
-    public static final String BORROW_EXCHANGE = "borrow.ex";
-    public static final String NOTIFY_EXCHANGE = "notify.ex";
-    public static final String STATS_EXCHANGE = "stats.ex";
+    public static final String BORROW_EXCHANGE = "borrow.exchange";
+    public static final String NOTIFY_EXCHANGE = "notify.exchange";
+    public static final String STATS_EXCHANGE = "stats.exchange";
 
     public static final String BORROW_SUCCESS_QUEUE = "queue.borrow.success";
     public static final String BORROW_FAIL_QUEUE = "queue.borrow.fail";
@@ -25,7 +25,7 @@ public class RabbitMQConfig {
 
     public static final String ROUTING_KEY_BORROW_SUCCESS = "borrow.success";
     public static final String ROUTING_KEY_BORROW_FAIL = "borrow.fail";
-    public static final String ROUTING_KEY_RETURN_SUCCESS = "return.success";
+    public static final String ROUTING_KEY_RETURN_SUCCESS = "borrow.return";
     public static final String ROUTING_KEY_NOTIFY_SMS = "notify.sms";
     public static final String ROUTING_KEY_NOTIFY_EMAIL = "notify.email";
     public static final String ROUTING_KEY_NOTIFY_INNER = "notify.inner";

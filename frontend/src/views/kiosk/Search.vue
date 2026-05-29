@@ -94,7 +94,7 @@
             <div class="book-meta">
               <el-tag size="small" type="info">{{ book.category }}</el-tag>
               <span class="stock-info">
-                库存：{{ book.available_copies || book.stock || 0 }}
+                库存：{{ getStock(book) }}
               </span>
             </div>
           </div>
@@ -141,7 +141,7 @@
                 {{ getStatusText(selectedBook) }}
               </el-tag>
             </p>
-            <p><span>库存：</span>{{ selectedBook.available_copies || selectedBook.stock || 0 }} 本</p>
+            <p><span>库存：</span>{{ getStock(selectedBook) }} 本</p>
             <p><span>位置：</span>{{ selectedBook.location || '请咨询工作人员' }}</p>
           </div>
           <div class="detail-description" v-if="selectedBook.description">
@@ -183,7 +183,7 @@ const books = ref([])
 const selectedBook = ref(null)
 const detailDialogVisible = ref(false)
 
-const hotTags = ['西游记', '红楼梦', '三国演义', '水浒传', 'JavaScript', 'Python']
+const hotTags = ['三体', '活着', '人类简史', '百年孤独', 'JavaScript', 'Python']
 
 const searchForm = reactive({
   keyword: '',
@@ -233,9 +233,9 @@ async function searchBooks() {
     }
 
     const response = await booksApi.getBooks(params)
-    books.value = response.books || []
-    pagination.total = response.pagination?.total || 0
-    pagination.pages = response.pagination?.pages || 0
+    books.value = response.records || response.books || []
+    pagination.total = response.total || response.pagination?.total || 0
+    pagination.pages = response.pages || response.pagination?.pages || 0
   } catch (error) {
     ElMessage.error('搜索失败')
     console.error('搜索失败:', error)
@@ -249,10 +249,14 @@ function getCoverImage(book) {
 }
 
 function getStockStatus(book) {
-  const stock = book.available_copies || book.stock || 0
+  const stock = getStock(book)
   if (stock === 0) return 'out'
   if (stock <= 3) return 'low'
   return 'available'
+}
+
+function getStock(book) {
+  return book?.availableCopies ?? book?.available_copies ?? book?.stock ?? 0
 }
 
 function getStockText(book) {

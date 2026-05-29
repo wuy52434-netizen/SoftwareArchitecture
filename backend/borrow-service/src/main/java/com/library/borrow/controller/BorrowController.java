@@ -6,6 +6,7 @@ import com.library.borrow.entity.BorrowRecord;
 import com.library.borrow.service.BorrowService;
 import com.library.common.result.PageResult;
 import com.library.common.result.Result;
+import com.library.common.result.ResultCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,10 +31,13 @@ public class BorrowController {
             @Valid @RequestBody BorrowRequest request,
             HttpServletRequest servletRequest) {
         Long userId = (Long) servletRequest.getAttribute("userId");
-        if (userId == null) {
-            return Result.error(401, "未登录");
+        if (userId == null && request.getUserId() != null) {
+            userId = request.getUserId();
         }
-        
+        if (userId == null) {
+            return Result.error(ResultCode.UNAUTHORIZED.getCode(), "请先登录或在借书机输入读者证号");
+        }
+
         BorrowRecord record = borrowService.borrowBook(userId, request);
         return Result.success("借阅成功", borrowService.toBorrowResponse(record));
     }
@@ -45,9 +49,15 @@ public class BorrowController {
             HttpServletRequest servletRequest) {
         Long userId = (Long) servletRequest.getAttribute("userId");
         if (userId == null) {
-            return Result.error(401, "未登录");
+            BorrowRecord record = null;
+            if (request.getBorrowId() != null) {
+                record = borrowService.getById(request.getBorrowId());
+            } else if (request.getBookId() != null) {
+                record = borrowService.getActiveByBookId(request.getBookId());
+            }
+            userId = record != null ? record.getUserId() : 1L;
         }
-        
+
         ReturnResponse response = borrowService.returnBook(userId, request);
         return Result.success("归还成功", response);
     }
@@ -58,9 +68,10 @@ public class BorrowController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) Long bookId,
             @RequestParam(required = false) String status) {
         
-        Page<BorrowRecord> pageResult = borrowService.pageRecords(page, size, userId, status);
+        Page<BorrowRecord> pageResult = borrowService.pageRecords(page, size, userId, bookId, status);
         
         List<BorrowResponse> records = pageResult.getRecords().stream()
                 .map(borrowService::toBorrowResponse)
@@ -79,19 +90,23 @@ public class BorrowController {
     @Operation(summary = "获取我的借阅记录")
     @GetMapping("/my-borrows")
     public Result<List<MyBorrowItem>> getMyBorrows(
+            @RequestParam(required = false) Long userId,
             @RequestParam(required = false, defaultValue = "all") String status,
             HttpServletRequest servletRequest) {
         
-        Long userId = (Long) servletRequest.getAttribute("userId");
-        if (userId == null) {
+        Long currentUserId = (Long) servletRequest.getAttribute("userId");
+        if (currentUserId == null) {
+            currentUserId = userId;
+        }
+        if (currentUserId == null) {
             return Result.error(401, "未登录");
         }
         
         List<BorrowRecord> records;
         if ("active".equals(status)) {
-            records = borrowService.getActiveByUserId(userId);
+            records = borrowService.getActiveByUserId(currentUserId);
         } else {
-            Page<BorrowRecord> pageResult = borrowService.pageRecords(1, 1000, userId, status);
+            Page<BorrowRecord> pageResult = borrowService.pageRecords(1, 1000, currentUserId, null, status);
             records = pageResult.getRecords();
         }
         
@@ -109,10 +124,30 @@ public class BorrowController {
         return Result.success(borrowService.toBorrowResponse(record));
     }
 
+    @Operation(summary = "续借图书")
+    @PutMapping("/borrow-records/{id}/renew")
+    public Result<BorrowResponse> renewBook(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer days,
+            HttpServletRequest servletRequest) {
+        Long userId = (Long) servletRequest.getAttribute("userId");
+        if (userId == null) {
+            return Result.error(ResultCode.UNAUTHORIZED.getCode(), "请先登录后续借");
+        }
+        BorrowRecord record = borrowService.renewBook(userId, id, days);
+        return Result.success("续借成功", borrowService.toBorrowResponse(record));
+    }
+
     private MyBorrowItem toMyBorrowItem(BorrowRecord record) {
+        BorrowResponse response = borrowService.toBorrowResponse(record);
         MyBorrowItem item = new MyBorrowItem();
         item.setId(record.getRecordId());
         item.setRecordId(record.getRecordId());
+        item.setBookTitle(response.getBookTitle());
+        item.setBookAuthor(response.getBookAuthor());
+        item.setBookCoverUrl(response.getBookCoverUrl());
+        item.setCopyId(record.getCopyId());
+        item.setCopyBarcode(response.getCopyBarcode());
         item.setBorrowDate(record.getBorrowDate());
         item.setDueDate(record.getDueDate());
         item.setReturnDate(record.getReturnDate());

@@ -22,7 +22,7 @@ public interface BorrowRecordMapper extends BaseMapper<BorrowRecord> {
 
     @Select("SELECT br.* FROM borrow_record br " +
             "JOIN book_copy bc ON br.copy_id = bc.copy_id " +
-            "JOIN book_info bi ON bc.isbn = bi.isbn " +
+            "JOIN book_info bi ON bc.book_id = bi.id " +
             "WHERE bi.id = #{bookId} AND br.return_date IS NULL AND br.deleted = 0 " +
             "LIMIT 1")
     BorrowRecord selectActiveByBookId(@Param("bookId") Long bookId);

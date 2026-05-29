@@ -11,7 +11,17 @@ const routes = [
   },
   {
     path: '/',
-    redirect: '/portal'
+    name: 'RootKiosk',
+    component: () => import('@/layouts/KioskLayout.vue'),
+    meta: { title: '借书机终端' },
+    children: [
+      {
+        path: '',
+        name: 'RootKioskHome',
+        component: () => import('@/views/kiosk/Home.vue'),
+        meta: { title: '首页' }
+      }
+    ]
   },
   {
     path: '/portal',
@@ -76,8 +86,14 @@ const routes = [
     name: 'Admin',
     component: () => import('@/layouts/AdminLayout.vue'),
     meta: { title: '管理后台', requiresAuth: true, requiresAdmin: true },
-    redirect: '/admin/books',
+    redirect: '/admin/dashboard',
     children: [
+      {
+        path: 'dashboard',
+        name: 'AdminDashboard',
+        component: () => import('@/views/admin/Dashboard.vue'),
+        meta: { title: '统计看板' }
+      },
       {
         path: 'books',
         name: 'AdminBooks',
@@ -103,6 +119,10 @@ const routes = [
         meta: { title: '系统设置' }
       }
     ]
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/'
   }
 ]
 
@@ -113,21 +133,25 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
   document.title = to.meta.title ? `${to.meta.title} - 图书管理系统` : '图书管理系统'
-  
+
   const authStore = useAuthStore()
-  
+
+  if (!authStore.isLoggedIn) {
+    authStore.restoreFromSession()
+  }
+
   if (to.meta.requiresAuth && !authStore.isLoggedIn) {
     ElMessage.warning('请先登录')
     next('/login')
     return
   }
-  
-  if (to.meta.requiresAdmin && authStore.user?.role !== 'admin') {
+
+  if (to.meta.requiresAdmin && authStore.user?.userType !== 'admin') {
     ElMessage.error('权限不足')
-    next('/portal')
+    next('/')
     return
   }
-  
+
   next()
 })
 

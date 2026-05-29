@@ -180,6 +180,18 @@ curl -X POST http://localhost:8080/api/auth/login \
   -d '{"username":"admin","password":"123456"}'
 ```
 
+### 8.1 答辩入口验证
+
+本项目答辩主线是自助借书机。前端构建并由 Nginx 挂载后，访问 `http://localhost` 应在地址栏保持根路径，并直接渲染借书机首页，而不是读者门户。
+
+| 页面 | 地址 | 说明 |
+|------|------|------|
+| 自助借书机 | `http://localhost` | 默认入口，地址栏保持根路径 |
+| 借书页面 | `http://localhost/kiosk/borrow` | 演示高并发借阅和重复点击防护 |
+| 还书页面 | `http://localhost/kiosk/return` | 演示自助还书 |
+| 管理后台 | `http://localhost/admin` | 图书管理、统计看板 |
+| 读者门户 | `http://localhost/portal` | 保留扩展功能，不作为答辩主线 |
+
 ### 9. 访问各控制台
 
 | 服务 | 地址 | 用户名 | 密码 |

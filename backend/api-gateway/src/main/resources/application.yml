@@ -2,6 +2,8 @@ server:
   port: 8080
 
 spring:
+  main:
+    allow-bean-definition-overriding: true
   application:
     name: api-gateway
 
@@ -23,45 +25,45 @@ spring:
         locator:
           enabled: true
           lower-case-service-id: true
-      
+
       routes:
         - id: user-service
-          uri: lb://user-service
+          uri: ${USER_SERVICE_URL:lb://user-service}
           predicates:
-            - Path=/api/users/**,/api/auth/**
+            - Path=/api/users/**,/api/auth/**,/api/settings/**
           filters:
             - StripPrefix=0
 
         - id: book-service
-          uri: lb://book-service
+          uri: ${BOOK_SERVICE_URL:lb://book-service}
           predicates:
             - Path=/api/books/**,/api/categories/**
           filters:
             - StripPrefix=0
 
         - id: borrow-service
-          uri: lb://borrow-service
+          uri: ${BORROW_SERVICE_URL:lb://borrow-service}
           predicates:
             - Path=/api/borrows/**,/api/borrow/**,/api/return/**,/api/my-borrows/**,/api/borrow-records/**
           filters:
             - StripPrefix=0
 
         - id: search-service
-          uri: lb://search-service
+          uri: ${SEARCH_SERVICE_URL:lb://search-service}
           predicates:
             - Path=/api/search/**
           filters:
             - StripPrefix=0
 
         - id: stats-service
-          uri: lb://stats-service
+          uri: ${STATS_SERVICE_URL:lb://stats-service}
           predicates:
             - Path=/api/stats/**
           filters:
             - StripPrefix=0
 
         - id: notify-service
-          uri: lb://notify-service
+          uri: ${NOTIFY_SERVICE_URL:lb://notify-service}
           predicates:
             - Path=/api/notify/**
           filters:
@@ -93,15 +95,23 @@ jwt:
   access-token-expire: 7200000
   refresh-token-expire: 604800000
 
-gateway:
-  white-list:
+auth-filter:
+  whiteList:
     - /api/auth/login
     - /api/auth/register
     - /api/auth/refresh
     - /api/books
-    - /api/books/*
+    - /api/books/**
     - /api/search
-    - /api/search/*
+    - /api/search/**
+    - /api/settings
+    - /api/settings/**
+    - /api/borrows/**
+    - /api/borrow/**
+    - /api/return/**
+    - /api/borrow-records/**
+    - /api/categories/**
+    - /api/users/card/**
     - /error
 
 management:

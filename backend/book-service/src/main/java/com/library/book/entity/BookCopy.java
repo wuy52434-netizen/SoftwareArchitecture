@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -16,17 +15,15 @@ public class BookCopy implements Serializable {
     @TableId(type = IdType.AUTO)
     private Long copyId;
 
-    private String isbn;
+    private Long bookId;
 
     private String barcode;
-
-    private LocalDate storageDate;
 
     private String status;
 
     private Long locationId;
 
-    private String condition;
+    private String bookCondition;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

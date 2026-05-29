@@ -41,10 +41,18 @@ public class UserDTO {
 
     @Data
     public static class UpdateRequest {
+        private String password;
         private String realName;
         private String phone;
         private String email;
         private String gender;
+        private String userType;
+        private String status;
+    }
+
+    @Data
+    public static class RefreshTokenRequest {
+        private String refreshToken;
     }
 
     @Data
@@ -57,6 +65,8 @@ public class UserDTO {
         private String phone;
         private String email;
         private String status;
+        private Integer maxBorrowCount;
+        private Integer currentBorrowCount;
         private String lastLoginTime;
         private String createdAt;
     }

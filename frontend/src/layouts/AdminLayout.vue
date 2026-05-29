@@ -3,7 +3,7 @@
     <el-aside :width="isCollapse ? '64px' : '220px'" class="admin-aside">
       <div class="logo-section">
         <div class="logo-icon">
-          <el-icon><Library /></el-icon>
+          <el-icon><Reading /></el-icon>
         </div>
         <div class="logo-text" v-show="!isCollapse">
           <h1>图书管理系统</h1>
@@ -18,6 +18,10 @@
         class="admin-menu"
         router
       >
+        <el-menu-item index="/admin/dashboard">
+          <el-icon><DataAnalysis /></el-icon>
+          <template #title>统计看板</template>
+        </el-menu-item>
         <el-menu-item index="/admin/books">
           <el-icon><Collection /></el-icon>
           <template #title>图书管理</template>
@@ -81,9 +85,9 @@
                   <el-icon><User /></el-icon>
                   个人中心
                 </el-dropdown-item>
-                <el-dropdown-item command="portal">
+                <el-dropdown-item command="kiosk">
                   <el-icon><HomeFilled /></el-icon>
-                  访问读者门户
+                  进入借书机
                 </el-dropdown-item>
                 <el-dropdown-item divided command="logout">
                   <el-icon><SwitchButton /></el-icon>
@@ -105,10 +109,11 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import {
-  Library,
+  Reading,
   Collection,
+  DataAnalysis,
   Document,
   User,
   Setting,
@@ -133,6 +138,7 @@ const activeMenu = computed(() => route.path)
 
 const currentPageTitle = computed(() => {
   const path = route.path
+  if (path.includes('dashboard')) return '统计看板'
   if (path.includes('books')) return '图书管理'
   if (path.includes('borrows')) return '借阅记录'
   if (path.includes('users')) return '用户管理'
@@ -147,10 +153,14 @@ function handleRefresh() {
 async function handleCommand(command) {
   switch (command) {
     case 'profile':
-      ElMessage.info('个人中心功能开发中...')
+      ElMessageBox.alert(
+        `用户名：${userStore.user?.username || '-'}\n姓名：${userStore.user?.realName || userStore.user?.name || '-'}\n角色：${userStore.isAdmin ? '超级管理员' : '管理员'}`,
+        '个人中心',
+        { confirmButtonText: '确定' }
+      )
       break
-    case 'portal':
-      router.push('/portal')
+    case 'kiosk':
+      router.push('/')
       break
     case 'logout':
       await ElMessageBox.confirm('确定要退出登录吗？', '提示', {

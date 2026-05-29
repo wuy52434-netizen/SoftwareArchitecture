@@ -109,8 +109,8 @@
         </el-table-column>
         <el-table-column label="库存" width="100" align="center">
           <template #default="{ row }">
-            <span :class="{ 'text-danger': (row.available_copies || row.stock || 0) === 0 }">
-              {{ row.available_copies || row.stock || 0 }}
+            <span :class="{ 'text-danger': getStock(row) === 0 }">
+              {{ getStock(row) }}
             </span>
           </template>
         </el-table-column>
@@ -226,11 +226,34 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
+            <el-form-item label="价格" prop="price">
+              <el-input-number
+                v-model="bookForm.price"
+                :min="0"
+                :max="9999"
+                :precision="2"
+                size="large"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
             <el-form-item label="状态">
               <el-select v-model="bookForm.status" placeholder="请选择状态" size="large" style="width: 100%">
                 <el-option label="可借阅" value="available" />
                 <el-option label="已借出" value="borrowed" />
                 <el-option label="已冻结" value="frozen" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="语言">
+              <el-select v-model="bookForm.language" placeholder="请选择语言" size="large" style="width: 100%">
+                <el-option label="中文" value="中文" />
+                <el-option label="英文" value="English" />
+                <el-option label="日文" value="日文" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -287,7 +310,7 @@
             {{ selectedBook.pub_date || selectedBook.publishDate || '未知' }}
           </el-descriptions-item>
           <el-descriptions-item label="库存数量">
-            {{ selectedBook.available_copies || selectedBook.stock || 0 }}
+            {{ getStock(selectedBook) }}
           </el-descriptions-item>
           <el-descriptions-item label="馆藏位置">
             {{ selectedBook.location || '未知' }}
@@ -345,7 +368,9 @@ const bookForm = reactive({
   publisher: '',
   pubDate: '',
   stock: 1,
+  price: 0,
   status: 'available',
+  language: '中文',
   location: '',
   coverUrl: '',
   description: ''
@@ -354,7 +379,6 @@ const bookForm = reactive({
 const bookRules = {
   title: [{ required: true, message: '请输入书名', trigger: 'blur' }],
   author: [{ required: true, message: '请输入作者', trigger: 'blur' }],
-  category: [{ required: true, message: '请选择分类', trigger: 'change' }],
   isbn: [{ required: true, message: '请输入ISBN', trigger: 'blur' }]
 }
 
@@ -381,9 +405,9 @@ async function loadBooks() {
     }
 
     const response = await booksApi.getBooks(params)
-    books.value = response.books || []
-    pagination.total = response.pagination?.total || 0
-    pagination.pages = response.pagination?.pages || 0
+    books.value = response.records || response.books || []
+    pagination.total = response.total || response.pagination?.total || 0
+    pagination.pages = response.pages || response.pagination?.pages || 0
   } catch (error) {
     ElMessage.error('加载图书列表失败')
     console.error('加载图书列表失败:', error)
@@ -402,6 +426,10 @@ function resetSearch() {
 
 function getCoverImage(book) {
   return book.cover_url || book.coverImage || book.coverUrl || `/static/images/${book.title}.jpg`
+}
+
+function getStock(book) {
+  return book?.availableCopies ?? book?.available_copies ?? book?.stock ?? 0
 }
 
 function getStatusText(book) {
@@ -433,15 +461,17 @@ function editBook(book) {
   bookForm.id = book.id
   bookForm.title = book.title
   bookForm.author = book.author
-  bookForm.category = book.category
+  bookForm.category = book.category || ''
   bookForm.isbn = book.isbn
   bookForm.publisher = book.publisher || ''
-  bookForm.pubDate = book.pub_date || book.publishDate || ''
-  bookForm.stock = book.stock || book.available_copies || 0
+  bookForm.pubDate = book.publicationDate || book.pub_date || book.publishDate || ''
+  bookForm.stock = book.totalCopies ?? book.total_copies ?? book.stock ?? book.available_copies ?? 0
+  bookForm.price = book.price || 0
   bookForm.status = book.status
+  bookForm.language = book.language || '中文'
   bookForm.location = book.location || ''
-  bookForm.coverUrl = book.cover_url || book.coverImage || ''
-  bookForm.description = book.description || ''
+  bookForm.coverUrl = book.coverUrl || book.cover_url || book.coverImage || ''
+  bookForm.description = book.description || book.summary || ''
   dialogVisible.value = true
 }
 
@@ -462,13 +492,9 @@ async function deleteBook(book) {
   )
 
   try {
-    const response = await booksApi.deleteBook(book.id)
-    if (response.ok) {
-      ElMessage.success('删除成功')
-      loadBooks()
-    } else {
-      throw new Error(response.error || '删除失败')
-    }
+    await booksApi.deleteBook(book.id)
+    ElMessage.success('删除成功')
+    loadBooks()
   } catch (error) {
     ElMessage.error(error.message || '删除失败')
   }
@@ -483,7 +509,9 @@ function resetBookForm() {
   bookForm.publisher = ''
   bookForm.pubDate = ''
   bookForm.stock = 1
+  bookForm.price = 0
   bookForm.status = 'available'
+  bookForm.language = '中文'
   bookForm.location = ''
   bookForm.coverUrl = ''
   bookForm.description = ''
@@ -497,34 +525,35 @@ async function submitBookForm() {
 
     submitLoading.value = true
     try {
+      const categoryMap = { '文学': 1, '历史': 2, '科技': 3, '艺术': 4, '教育': 5, '其他': 6 }
+
       const bookData = {
         title: bookForm.title,
         author: bookForm.author,
-        category: bookForm.category,
-        isbn: bookForm.isbn,
-        publisher: bookForm.publisher,
-        pub_date: bookForm.pubDate,
-        stock: bookForm.stock,
+        categoryId: categoryMap[bookForm.category] || 6,
+        price: bookForm.price || 1,
+        summary: bookForm.description || null,
+        publicationDate: bookForm.pubDate || null,
+        coverImage: bookForm.coverUrl || null,
         status: bookForm.status,
-        location: bookForm.location,
-        cover_url: bookForm.coverUrl,
-        description: bookForm.description
+        language: bookForm.language || null,
+        description: bookForm.description || null,
+        location: bookForm.location || null,
+        totalCopies: bookForm.stock ?? 1
       }
 
-      let response
       if (isEdit.value && bookForm.id) {
-        response = await booksApi.updateBook(bookForm.id, bookData)
+        await booksApi.updateBook(bookForm.id, bookData)
       } else {
-        response = await booksApi.addBook(bookData)
+        await booksApi.addBook({
+          ...bookData,
+          isbn: bookForm.isbn
+        })
       }
 
-      if (response.ok) {
-        ElMessage.success(isEdit.value ? '更新成功' : '添加成功')
-        dialogVisible.value = false
-        loadBooks()
-      } else {
-        throw new Error(response.error || (isEdit.value ? '更新失败' : '添加失败'))
-      }
+      ElMessage.success(isEdit.value ? '更新成功' : '添加成功')
+      dialogVisible.value = false
+      loadBooks()
     } catch (error) {
       ElMessage.error(error.message || '操作失败')
     } finally {

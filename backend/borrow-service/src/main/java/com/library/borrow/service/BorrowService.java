@@ -52,7 +52,8 @@ public class BorrowService {
     @Value("${system.max-fine-amount:50.0}")
     private double maxFineAmount;
 
-    @SentinelResource(value = "borrowBook", blockHandler = "borrowBlockHandler", fallback = "borrowFallback")
+    @SentinelResource(value = "borrowBook", blockHandler = "borrowBlockHandler", fallback = "borrowFallback",
+            exceptionsToIgnore = BusinessException.class)
     @Transactional(rollbackFor = Exception.class)
     public BorrowRecord borrowBook(Long userId, BorrowRequest request) {
         Long bookId = request.getBookId();
@@ -95,22 +96,27 @@ public class BorrowService {
                 throw new BusinessException(ResultCode.BOOK_NOT_AVAILABLE);
             }
 
-            BookClient.BookCopy selectedCopy;
             if (copyId != null) {
                 Result<BookClient.BookCopy> copyResult = bookClient.getCopyById(copyId);
                 if (copyResult == null || !"200".equals(String.valueOf(copyResult.getCode()))) {
                     throw new BusinessException(ResultCode.BOOK_COPY_NOT_FOUND);
                 }
-                selectedCopy = copyResult.getData();
+                BookClient.BookCopy selectedCopy = copyResult.getData();
+                if (selectedCopy == null || selectedCopy.getBookId() == null || !bookId.equals(selectedCopy.getBookId())) {
+                    throw new BusinessException(ResultCode.PARAM_ERROR, "图书副本与图书不匹配");
+                }
                 if (!"available".equals(selectedCopy.getStatus())) {
                     throw new BusinessException(ResultCode.BOOK_COPY_NOT_AVAILABLE);
                 }
             } else {
-                selectedCopy = null;
-                copyId = 1L;
+                Result<BookClient.BookCopy> copyResult = bookClient.getAvailableCopy(bookId);
+                if (copyResult == null || !"200".equals(String.valueOf(copyResult.getCode())) || copyResult.getData() == null) {
+                    throw new BusinessException(ResultCode.NO_COPY_AVAILABLE);
+                }
+                copyId = copyResult.getData().getId();
             }
 
-            Result<BookClient.BookCopy> decreaseResult = bookClient.decreaseStock(bookId, copyId);
+            Result<Void> decreaseResult = bookClient.decreaseStock(bookId, copyId);
             if (decreaseResult == null || !"200".equals(String.valueOf(decreaseResult.getCode()))) {
                 throw new BusinessException(ResultCode.BOOK_OPERATION_FAILED, "扣减库存失败");
             }
@@ -131,14 +137,16 @@ public class BorrowService {
             record.setFineAmount(BigDecimal.ZERO);
             record.setFinePaid(0);
             record.setOperatorId(userId);
+            record.setRemark(request.getNote());
             record.setCreatedAt(LocalDateTime.now());
             record.setUpdatedAt(LocalDateTime.now());
             record.setDeleted(0);
 
             borrowRecordMapper.insert(record);
-            log.info("借阅记录创建成功: userId={}, bookId={}, copyId={}, recordId={}", 
+            log.info("借阅记录创建成功: userId={}, bookId={}, copyId={}, recordId={}",
                 userId, bookId, copyId, record.getRecordId());
 
+            record.setBookTitle(bookInfo.getTitle());
             sendBorrowEvent(record, "success");
             clearBookCache(bookId);
 
@@ -155,7 +163,8 @@ public class BorrowService {
         }
     }
 
-    @SentinelResource(value = "returnBook", blockHandler = "returnBlockHandler", fallback = "returnFallback")
+    @SentinelResource(value = "returnBook", blockHandler = "returnBlockHandler", fallback = "returnFallback",
+            exceptionsToIgnore = BusinessException.class)
     @Transactional(rollbackFor = Exception.class)
     public ReturnResponse returnBook(Long userId, ReturnRequest request) {
         BorrowRecord record;
@@ -189,10 +198,16 @@ public class BorrowService {
         }
 
         try {
-            bookClient.increaseStock(record.getBookId(), record.getCopyId());
+            Result<Void> increaseResult = bookClient.increaseStock(record.getBookId(), record.getCopyId());
+            if (increaseResult == null || !"200".equals(String.valueOf(increaseResult.getCode()))) {
+                throw new BusinessException(ResultCode.BOOK_OPERATION_FAILED, "增加库存失败");
+            }
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.warn("归还图书时增加库存失败: recordId={}, bookId={}, copyId={}, error={}", 
-                record.getRecordId(), record.getBookId(), record.getCopyId(), e.getMessage());
+            log.error("归还图书时增加库存失败: recordId={}, bookId={}, copyId={}, error={}",
+                    record.getRecordId(), record.getBookId(), record.getCopyId(), e.getMessage(), e);
+            throw new BusinessException(ResultCode.BOOK_OPERATION_FAILED, "归还失败，库存未更新");
         }
 
         try {
@@ -211,6 +226,7 @@ public class BorrowService {
         log.info("图书归还成功: recordId={}, overdueDays={}, fineAmount={}", 
                 record.getRecordId(), overdueDays, fineAmount);
 
+        populateBookTitle(record);
         sendBorrowEvent(record, "return");
         clearBookCache(record.getBookId());
 
@@ -237,25 +253,39 @@ public class BorrowService {
         return borrowRecordMapper.selectActiveByUserId(userId);
     }
 
+    public BorrowRecord getActiveByBookId(Long bookId) {
+        BorrowRecord record = borrowRecordMapper.selectActiveByBookId(bookId);
+        if (record == null) {
+            throw new BusinessException(ResultCode.BORROW_NOT_FOUND);
+        }
+        return record;
+    }
+
     public int countActiveByUserId(Long userId) {
         return borrowRecordMapper.countActiveByUserId(userId);
     }
 
-    public Page<BorrowRecord> pageRecords(int page, int size, Long userId, String status) {
+    public Page<BorrowRecord> pageRecords(int page, int size, Long userId, Long bookId, String status) {
         Page<BorrowRecord> pageParam = new Page<>(page, size);
-        
+
         LambdaQueryWrapper<BorrowRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(BorrowRecord::getDeleted, 0);
         
         if (userId != null) {
             wrapper.eq(BorrowRecord::getUserId, userId);
         }
+
+        if (bookId != null) {
+            wrapper.eq(BorrowRecord::getBookId, bookId);
+        }
         
-        if (status != null && !status.isEmpty()) {
+        if (status != null && !status.isEmpty() && !"all".equals(status)) {
             if ("active".equals(status)) {
                 wrapper.isNull(BorrowRecord::getReturnDate);
             } else if ("returned".equals(status)) {
                 wrapper.isNotNull(BorrowRecord::getReturnDate);
+            } else if ("overdue".equals(status)) {
+                wrapper.isNull(BorrowRecord::getReturnDate)
+                        .lt(BorrowRecord::getDueDate, LocalDate.now());
             } else {
                 wrapper.eq(BorrowRecord::getStatus, status);
             }
@@ -284,13 +314,48 @@ public class BorrowService {
         return BigDecimal.ZERO;
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    public BorrowRecord renewBook(Long userId, Long recordId, Integer days) {
+        BorrowRecord record = getById(recordId);
+        if (record.getReturnDate() != null || BORROW_STATUS_RETURNED.equals(record.getStatus())) {
+            throw new BusinessException(ResultCode.BORROW_ALREADY_RETURNED);
+        }
+        if (userId != null && !userId.equals(record.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN);
+        }
+
+        int renewDays = days != null && days > 0 ? days : defaultBorrowDays;
+        LocalDate baseDate = record.getDueDate() != null && record.getDueDate().isAfter(LocalDate.now())
+                ? record.getDueDate()
+                : LocalDate.now();
+        record.setDueDate(baseDate.plusDays(renewDays));
+        record.setUpdatedAt(LocalDateTime.now());
+        borrowRecordMapper.updateById(record);
+
+        log.info("借阅记录续借成功: recordId={}, newDueDate={}", recordId, record.getDueDate());
+        return record;
+    }
+
     public void sendBorrowEvent(BorrowRecord record, String eventType) {
         try {
             String routingKey = "success".equals(eventType) ? ROUTING_KEY_BORROW_SUCCESS : ROUTING_KEY_BORROW_RETURN;
-            rabbitTemplate.convertAndSend(EXCHANGE_BORROW, routingKey, record);
+
+            java.util.Map<String, Object> message = new java.util.HashMap<>();
+            message.put("eventType", "success".equals(eventType) ? "BORROW_SUCCESS" : "RETURN_SUCCESS");
+            message.put("recordId", record.getRecordId());
+            message.put("userId", record.getUserId());
+            message.put("bookId", record.getBookId());
+            message.put("copyId", record.getCopyId());
+            message.put("bookTitle", record.getBookTitle());
+            message.put("borrowDate", record.getBorrowDate() != null ? record.getBorrowDate().toString() : null);
+            message.put("dueDate", record.getDueDate() != null ? record.getDueDate().toString() : null);
+            message.put("returnDate", record.getReturnDate() != null ? record.getReturnDate().toString() : null);
+            message.put("timestamp", System.currentTimeMillis());
+
+            rabbitTemplate.convertAndSend(EXCHANGE_BORROW, routingKey, message);
             log.info("借阅事件发送成功: eventType={}, recordId={}", eventType, record.getRecordId());
         } catch (Exception e) {
-            log.warn("借阅事件发送失败: {}", e.getMessage());
+            log.warn("借阅事件发送失败(不影响核心借还流程): {}", e.getMessage());
         }
     }
 
@@ -301,6 +366,20 @@ public class BorrowService {
             log.debug("图书缓存已清除: bookId={}", bookId);
         } catch (Exception e) {
             log.warn("清除图书缓存失败: {}", e.getMessage());
+        }
+    }
+
+    private void populateBookTitle(BorrowRecord record) {
+        if (record.getBookTitle() != null) {
+            return;
+        }
+        try {
+            Result<BookClient.BookInfo> bookResult = bookClient.getBookById(record.getBookId());
+            if (bookResult != null && "200".equals(String.valueOf(bookResult.getCode())) && bookResult.getData() != null) {
+                record.setBookTitle(bookResult.getData().getTitle());
+            }
+        } catch (Exception e) {
+            log.debug("获取图书标题失败: bookId={}", record.getBookId());
         }
     }
 
@@ -317,6 +396,41 @@ public class BorrowService {
         response.setFineAmount(record.getFineAmount());
         response.setFinePaid(record.getFinePaid());
         response.setRemark(record.getRemark());
+
+        try {
+            Result<BookClient.BookInfo> bookResult = bookClient.getBookById(record.getBookId());
+            if (bookResult != null && "200".equals(String.valueOf(bookResult.getCode()))) {
+                BookClient.BookInfo book = bookResult.getData();
+                response.setBookTitle(book.getTitle());
+                response.setBookAuthor(book.getAuthor());
+                response.setBookCoverUrl(book.getCoverImage());
+            }
+        } catch (Exception e) {
+            log.debug("获取图书信息失败: bookId={}", record.getBookId());
+        }
+
+        try {
+            if (record.getCopyId() != null) {
+                Result<BookClient.BookCopy> copyResult = bookClient.getCopyById(record.getCopyId());
+                if (copyResult != null && "200".equals(String.valueOf(copyResult.getCode())) && copyResult.getData() != null) {
+                    response.setCopyBarcode(copyResult.getData().getBarcode());
+                }
+            }
+        } catch (Exception e) {
+            log.debug("获取图书副本信息失败: copyId={}", record.getCopyId());
+        }
+
+        try {
+            Result<UserClient.UserInfo> userResult = userClient.getUserById(record.getUserId());
+            if (userResult != null && "200".equals(String.valueOf(userResult.getCode()))) {
+                UserClient.UserInfo user = userResult.getData();
+                response.setReaderName(user.getRealName() != null ? user.getRealName() : user.getUsername());
+                response.setReaderId(user.getUsername());
+            }
+        } catch (Exception e) {
+            log.debug("获取用户信息失败: userId={}", record.getUserId());
+        }
+
         return response;
     }
 

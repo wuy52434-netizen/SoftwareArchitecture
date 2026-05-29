@@ -111,6 +111,7 @@
               type="warning"
               size="large"
               plain
+              :loading="renewingIds.includes(borrow.id)"
               @click="renewBook(borrow)"
             >
               <el-icon><Refresh /></el-icon>
@@ -194,6 +195,7 @@ const returningBorrow = ref(null)
 const returnDialogVisible = ref(false)
 const returning = ref(false)
 const returningIds = ref([])
+const renewingIds = ref([])
 
 let settings = {
   overdue_fine_per_day: 0.5,
@@ -233,9 +235,9 @@ onMounted(async () => {
 async function loadSettings() {
   try {
     const response = await settingsApi.getSettings()
-    if (response.ok && response.settings) {
-      settings.overdue_fine_per_day = parseFloat(response.settings.overdue_fine_per_day) || 0.5
-      settings.max_fine_amount = parseFloat(response.settings.max_fine_amount) || 50
+    if (response) {
+      settings.overdue_fine_per_day = parseFloat(response.overdueFinePerDay) || 0.5
+      settings.max_fine_amount = parseFloat(response.maxFineAmount) || 50
     }
   } catch (error) {
     console.error('加载系统设置失败:', error)
@@ -246,7 +248,18 @@ async function loadMyBorrows() {
   loading.value = true
   try {
     const response = await borrowsApi.getMyBorrows()
-    borrows.value = response.borrows || []
+    const rawRecords = Array.isArray(response) ? response : (response.records || response.borrows || [])
+    borrows.value = rawRecords.map(b => ({
+      id: b.recordId || b.id,
+      book_id: b.bookId || b.book_id,
+      book_title: b.bookTitle || b.book_title || '未知图书',
+      book_author: b.bookAuthor || b.book_author || '',
+      book_cover_url: b.bookCoverUrl || b.book_cover_url,
+      borrow_date: b.borrowDate || b.borrow_date,
+      due_date: b.dueDate || b.due_date,
+      return_date: b.returnDate || b.return_date,
+      status: b.status
+    }))
   } catch (error) {
     ElMessage.error('加载借阅记录失败')
     console.error('加载借阅记录失败:', error)
@@ -320,26 +333,18 @@ function returnBook(borrow) {
 
 async function confirmReturn() {
   if (!returningBorrow.value) return
-  
+
   returning.value = true
   returningIds.value.push(returningBorrow.value.id)
-  
+
   try {
-    const response = await borrowsApi.returnBook({
-      borrow_id: returningBorrow.value.id
+    await borrowsApi.returnBook({
+      borrowId: returningBorrow.value.id
     })
-    
-    if (response.ok) {
-      let message = '归还成功！'
-      if (response.overdue_days > 0) {
-        message = `归还成功！逾期 ${response.overdue_days} 天，罚款 ¥${response.fine_amount.toFixed(2)}`
-      }
-      ElMessage.success(message)
-      returnDialogVisible.value = false
-      loadMyBorrows()
-    } else {
-      throw new Error(response.error || '归还失败')
-    }
+
+    ElMessage.success('归还成功！')
+    returnDialogVisible.value = false
+    loadMyBorrows()
   } catch (error) {
     ElMessage.error(error.message || '归还失败，请重试')
   } finally {
@@ -351,7 +356,7 @@ async function confirmReturn() {
 async function renewBook(borrow) {
   try {
     await ElMessageBox.confirm(
-      `确定要续借《${borrow.book_title}》吗？`,
+      `确定要续借《${borrow.book_title}》30 天吗？`,
       '续借确认',
       {
         confirmButtonText: '确定',
@@ -359,10 +364,17 @@ async function renewBook(borrow) {
         type: 'info'
       }
     )
-    
-    ElMessage.info('续借功能开发中...')
-  } catch {
-    // 用户取消
+
+    renewingIds.value.push(borrow.id)
+    await borrowsApi.renewBook(borrow.id, 30)
+    ElMessage.success('续借成功')
+    await loadMyBorrows()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(error.message || '续借失败，请重试')
+    }
+  } finally {
+    renewingIds.value = renewingIds.value.filter(id => id !== borrow.id)
   }
 }
 </script>

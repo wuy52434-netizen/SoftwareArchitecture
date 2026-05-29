@@ -38,7 +38,8 @@ api.interceptors.response.use(
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('currentUser')
-      if (!window.location.pathname.includes('login')) {
+      const isKiosk = window.location.pathname.startsWith('/kiosk')
+      if (!window.location.pathname.includes('login') && !isKiosk) {
         ElMessage.warning('登录已过期，请重新登录')
         setTimeout(() => {
           window.location.href = '/login'

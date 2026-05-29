@@ -51,6 +51,7 @@ public class BookDTO {
         private String language;
         private String description;
         private String location;
+        private Integer totalCopies;
     }
 
     @Data
@@ -103,11 +104,21 @@ public class BookDTO {
     @Data
     public static class CopyResponse {
         private Long copyId;
+        private Long bookId;
         private String isbn;
         private String barcode;
         private String status;
+        private Long locationId;
         private String condition;
         private String storageDate;
         private BookResponse bookInfo;
+    }
+
+    @Data
+    public static class ScanBookResponse {
+        private String inputType;
+        private Boolean copyAvailable;
+        private BookResponse book;
+        private CopyResponse copy;
     }
 }

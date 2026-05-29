@@ -18,10 +18,10 @@
             <el-icon><Camera /></el-icon>
           </div>
           <h3>扫描图书条码</h3>
-          <p>将图书放在扫码区，或手动输入ISBN/借阅号</p>
-          <el-input
-            v-model="searchInput"
-            placeholder="请输入ISBN或借阅号"
+            <p>将图书放在扫码区，或手动输入图书条码/ISBN/借阅号</p>
+            <el-input
+              v-model="searchInput"
+              placeholder="请输入图书条码、ISBN或借阅号"
             size="large"
             class="manual-input"
             @keyup.enter="searchForReturn"
@@ -134,7 +134,7 @@
               预计罚款：<span class="highlight fine-amount">¥{{ totalFine.toFixed(2) }}</span>
             </p>
           </div>
-          <el-button type="primary" size="large" @click="confirmReturn">
+          <el-button type="primary" size="large" :loading="returnLoading" @click="confirmReturn">
             <el-icon><CircleCheck /></el-icon>
             确认归还
           </el-button>
@@ -220,9 +220,9 @@ onMounted(async () => {
 async function loadSettings() {
   try {
     const response = await settingsApi.getSettings()
-    if (response.ok && response.settings) {
-      settings.overdue_fine_per_day = parseFloat(response.settings.overdue_fine_per_day) || 0.5
-      settings.max_fine_amount = parseFloat(response.settings.max_fine_amount) || 50
+    if (response) {
+      settings.overdue_fine_per_day = parseFloat(response.overdueFinePerDay) || 0.5
+      settings.max_fine_amount = parseFloat(response.maxFineAmount) || 50
     }
   } catch (error) {
     console.error('加载系统设置失败:', error)
@@ -273,26 +273,49 @@ async function searchForReturn() {
   }
 
   try {
-    const borrowsResponse = await borrowsApi.getAllBorrows()
-    const allBorrows = borrowsResponse.borrows || []
-    
+    const borrowsResponse = await borrowsApi.getAllBorrows({ perPage: 1000, status: 'active' })
+    const rawRecords = Array.isArray(borrowsResponse) ? borrowsResponse : (borrowsResponse.records || borrowsResponse.borrows || [])
+
+    // 映射为前端展示字段
+    const allBorrows = rawRecords.map(b => ({
+      id: b.recordId,
+      book_id: b.bookId,
+      book_title: b.bookTitle || '未知图书',
+      book_author: b.bookAuthor || '',
+      book_cover_url: b.bookCoverUrl,
+      copy_id: b.copyId,
+      copy_barcode: b.copyBarcode,
+      borrow_date: b.borrowDate,
+      due_date: b.dueDate,
+      return_date: b.returnDate,
+      status: b.status
+    }))
+
     const activeBorrows = allBorrows.filter(b => !b.return_date)
-    
-    const match = activeBorrows.find(b => 
-      b.book_isbn === searchInput.value.trim() || 
-      b.id === parseInt(searchInput.value) ||
-      b.book_title.toLowerCase().includes(searchInput.value.toLowerCase())
-    )
+    const keyword = searchInput.value.trim()
+
+    // 先尝试通过借阅号匹配
+    let match = activeBorrows.find(b => b.id === parseInt(keyword))
+
+    // 再通过书名匹配
+    if (!match) {
+      match = activeBorrows.find(b =>
+        b.copy_barcode === keyword ||
+        b.book_title.toLowerCase().includes(keyword.toLowerCase())
+      )
+    }
 
     if (match) {
       currentBorrow.value = match
       searchInput.value = ''
     } else {
-      const booksResponse = await booksApi.getBooks({ search: searchInput.value.trim(), perPage: 10 })
-      if (booksResponse.books && booksResponse.books.length > 0) {
-        const book = booksResponse.books[0]
+      // 通过 ISBN 查图书，再匹配借阅记录
+      const booksResponse = await booksApi.getBooks({ search: keyword, perPage: 10 })
+      const bookList = booksResponse.records || booksResponse.books || []
+      if (bookList.length > 0) {
+        const book = bookList[0]
         const bookBorrow = activeBorrows.find(b => b.book_id === book.id)
-        
+
         if (bookBorrow) {
           currentBorrow.value = bookBorrow
           searchInput.value = ''
@@ -350,7 +373,7 @@ async function confirmReturn() {
   try {
     for (const item of returnList.value) {
       await borrowsApi.returnBook({
-        borrow_id: item.id
+        borrowId: item.id
       })
     }
 

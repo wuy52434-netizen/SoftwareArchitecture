@@ -1305,27 +1305,31 @@ class ApiIntegrationTest {
 
 ## 性能测试
 
-### JMeter 测试计划
+### JMeter 可用性演示计划
 
-创建 `tests/jmeter/library-api-test-plan.jmx`
+本项目当前提供两个可直接导入 JMeter 的演示计划：
+
+| 文件 | 用途 |
+|------|------|
+| `demo/jmeter/borrow-concurrency.jmx` | 高并发同时借同一实体副本，验证不会超借 |
+| `demo/jmeter/duplicate-click.jmx` | 模拟网络抖动/连续点击重复借书，验证同一副本只成功一次 |
+| `demo/jmeter/reset-demo-copy.sql` | 每次演示前恢复 `BC0024001` 为可借状态 |
 
 ### 测试场景
 
-| 场景 | 并发用户 | 持续时间 | 目标 QPS |
+| 场景 | 并发用户 | 请求入口 | 预期结果 |
 |------|----------|----------|----------|
-| 图书列表查询 | 100 | 5分钟 | >= 500 |
-| 用户登录 | 50 | 5分钟 | >= 200 |
-| 借书操作 | 30 | 5分钟 | >= 100 |
-| 混合场景 | 200 | 10分钟 | >= 300 |
+| 高并发借同一副本 | 20 | `http://localhost/api/borrow` | 只有 1 个业务成功，其余被拦截 |
+| 连续点击重复借书 | 5 | `http://localhost/api/borrow` | 第一次成功，后续返回 `2007 图书副本不可用` |
 
 ### 性能指标
 
 | 指标 | 目标值 | 说明 |
 |------|--------|------|
-| 响应时间 (P95) | < 200ms | 95% 请求响应时间 |
-| 响应时间 (P99) | < 500ms | 99% 请求响应时间 |
-| 错误率 | < 1% | 请求失败率 |
-| 吞吐量 | 根据场景 | 每秒处理请求数 |
+| 业务成功数 | 1 | 同一实体副本只能借出一次 |
+| 库存一致性 | `available_copies >= 0` | 不允许超借或库存负数 |
+| 副本一致性 | `book_copy.status` 与 `borrow_record.copy_id` 一致 | 借出去的是具体实体副本 |
+| 响应时间 | 现场观察 | 作为辅助指标，不作为本课程核心评分点 |
 
 ---
 
@@ -1510,8 +1514,9 @@ mvn clean test jacoco:report
 # 运行集成测试
 mvn test -Dtest=*IntegrationTest
 
-# 运行性能测试（JMeter）
-jmeter -n -t tests/jmeter/library-api-test-plan.jmx -l results.jtl
+# 运行 JMeter 可用性演示
+jmeter -n -t demo/jmeter/borrow-concurrency.jmx -l demo/jmeter/borrow-concurrency.jtl
+jmeter -n -t demo/jmeter/duplicate-click.jmx -l demo/jmeter/duplicate-click.jtl
 ```
 
 ### C. 测试工具推荐

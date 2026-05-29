@@ -10,6 +10,11 @@ export async function returnBook(data) {
 
 export async function getMyBorrows(status = 'all') {
   const queryParams = new URLSearchParams()
+  const currentUser = getCurrentUser()
+  const userId = currentUser?.userId || currentUser?.id
+  if (userId) {
+    queryParams.append('userId', userId)
+  }
   if (status !== 'all') {
     queryParams.append('status', status)
   }
@@ -21,10 +26,29 @@ export async function getAllBorrows(params = {}) {
   const queryParams = new URLSearchParams()
   
   queryParams.append('page', page)
-  queryParams.append('per_page', perPage)
-  if (bookId) queryParams.append('book_id', bookId)
-  if (userId) queryParams.append('user_id', userId)
+  queryParams.append('size', perPage)
+  if (bookId) queryParams.append('bookId', bookId)
+  if (userId) queryParams.append('userId', userId)
   if (status) queryParams.append('status', status)
   
-  return api.get(`/borrows?${queryParams.toString()}`)
+  return api.get(`/borrow-records?${queryParams.toString()}`)
+}
+
+export async function renewBook(recordId, days) {
+  const queryParams = new URLSearchParams()
+  if (days) {
+    queryParams.append('days', days)
+  }
+  const query = queryParams.toString()
+  return api.put(`/borrow-records/${recordId}/renew${query ? `?${query}` : ''}`)
+}
+
+function getCurrentUser() {
+  const savedUser = localStorage.getItem('currentUser')
+  if (!savedUser) return null
+  try {
+    return JSON.parse(savedUser)
+  } catch (e) {
+    return null
+  }
 }

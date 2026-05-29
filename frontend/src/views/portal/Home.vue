@@ -178,7 +178,7 @@
                 {{ getStatusText(selectedBook) }}
               </el-tag>
             </p>
-            <p><span>库存：</span>{{ selectedBook.available_copies || selectedBook.stock || 0 }} 本</p>
+            <p><span>库存：</span>{{ getStock(selectedBook) }} 本</p>
           </div>
           <div class="detail-description" v-if="selectedBook.description">
             <h3>内容简介</h3>
@@ -245,7 +245,7 @@ onMounted(async () => {
 async function loadPopularBooks() {
   try {
     const response = await booksApi.getPopularBooks()
-    popularBooks.value = response.books || []
+    popularBooks.value = response || []
     stats.popular = popularBooks.value.length
   } catch (error) {
     console.error('加载热门图书失败:', error)
@@ -255,8 +255,8 @@ async function loadPopularBooks() {
 async function loadNewBooks() {
   try {
     const response = await booksApi.getBooks({ perPage: 8 })
-    newBooks.value = response.books || []
-    stats.totalBooks = response.pagination?.total || newBooks.value.length
+    newBooks.value = response.records || response.books || []
+    stats.totalBooks = response.total || response.pagination?.total || newBooks.value.length
   } catch (error) {
     console.error('加载新书失败:', error)
   }
@@ -265,12 +265,12 @@ async function loadNewBooks() {
 async function loadMyBorrows() {
   try {
     const response = await borrowsApi.getMyBorrows()
-    const borrows = response.borrows || []
+    const borrows = Array.isArray(response) ? response : (response.records || response.borrows || [])
     stats.myBorrows = borrows.length
     const today = new Date()
     stats.overdue = borrows.filter(b => {
-      if (b.return_date) return false
-      const dueDate = new Date(b.due_date)
+      if (b.return_date || b.returnDate) return false
+      const dueDate = new Date(b.due_date || b.dueDate)
       return today > dueDate
     }).length
   } catch (error) {
@@ -292,10 +292,14 @@ function getCoverImage(book) {
 }
 
 function getStockStatus(book) {
-  const stock = book.available_copies || book.stock || 0
+  const stock = getStock(book)
   if (stock === 0) return 'out'
   if (stock <= 3) return 'low'
   return 'available'
+}
+
+function getStock(book) {
+  return book?.availableCopies ?? book?.available_copies ?? book?.stock ?? 0
 }
 
 function getStockText(book) {

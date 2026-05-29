@@ -11,13 +11,16 @@ public interface BookClient {
     Result<BookInfo> getBookById(@PathVariable Long id);
 
     @PutMapping("/api/books/{id}/decrease-stock")
-    Result<BookCopy> decreaseStock(@PathVariable Long id, @RequestParam Long copyId);
+    Result<Void> decreaseStock(@PathVariable Long id, @RequestParam Long copyId);
 
     @PutMapping("/api/books/{id}/increase-stock")
-    Result<BookCopy> increaseStock(@PathVariable Long id, @RequestParam Long copyId);
+    Result<Void> increaseStock(@PathVariable Long id, @RequestParam Long copyId);
 
     @GetMapping("/api/books/copy/{copyId}")
     Result<BookCopy> getCopyById(@PathVariable Long copyId);
+
+    @GetMapping("/api/books/{id}/available-copy")
+    Result<BookCopy> getAvailableCopy(@PathVariable Long id);
 
     @PutMapping("/api/books/copy/{copyId}/status")
     Result<Void> updateCopyStatus(@PathVariable Long copyId, @RequestParam String status);
@@ -52,17 +55,23 @@ public interface BookClient {
 
     class BookCopy {
         private Long id;
+        private Long copyId;
         private Long bookId;
         private String copyNumber;
+        private String barcode;
         private String location;
         private String status;
 
-        public Long getId() { return id; }
+        public Long getId() { return id != null ? id : copyId; }
         public void setId(Long id) { this.id = id; }
+        public Long getCopyId() { return copyId; }
+        public void setCopyId(Long copyId) { this.copyId = copyId; }
         public Long getBookId() { return bookId; }
         public void setBookId(Long bookId) { this.bookId = bookId; }
         public String getCopyNumber() { return copyNumber; }
         public void setCopyNumber(String copyNumber) { this.copyNumber = copyNumber; }
+        public String getBarcode() { return barcode; }
+        public void setBarcode(String barcode) { this.barcode = barcode; }
         public String getLocation() { return location; }
         public void setLocation(String location) { this.location = location; }
         public String getStatus() { return status; }

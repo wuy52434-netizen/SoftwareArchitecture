@@ -127,6 +127,8 @@ docker-compose up -d mysql redis rabbitmq elasticsearch nacos
 
 #### 3. 编译项目
 
+**方式 A：命令行编译**
+
 ```bash
 cd backend
 
@@ -134,7 +136,36 @@ cd backend
 mvn clean install -DskipTests
 ```
 
+**方式 B：IDEA Maven 插件编译（推荐）**
+
+1. 用 IDEA 打开 `backend` 目录作为 Maven 项目（File → Open）
+2. 等待 IDEA 自动下载依赖完成（右下角进度条）
+3. 打开右侧 **Maven** 工具窗口（View → Tool Windows → Maven）
+4. 展开 **library-management (root)** → **Lifecycle**
+5. 双击 **clean**，等待执行完成
+6. 双击 **install**（或 **package**，效果同 `mvn clean install -DskipTests`）
+7. 跳过测试：点击 Maven 窗口工具栏的 ⚡ 闪电图标（Toggle 'Skip Tests' Mode），开启后所有 Lifecycle 操作自动跳过测试
+
+> 也可以直接使用 IDEA 菜单：**Build → Build Project** (Ctrl+F9) 仅编译不打包。
+
 #### 4. 运行服务
+
+**方式 A：IDEA 中运行（推荐）**
+
+1. 在 IDEA 中找到各模块的 `Application.java` 主类
+2. 右键主类 → Run，或点击 `main` 方法旁的 ▶ 绿色三角
+3. 按以下顺序启动：
+   - `UserServiceApplication` (端口 8081)
+   - `BookServiceApplication` (端口 8082)
+   - `BorrowServiceApplication` (端口 8083)
+   - `SearchServiceApplication` (端口 8084)
+   - `NotifyServiceApplication` (端口 8085)
+   - `StatsServiceApplication` (端口 8086)
+   - `ApiGatewayApplication` (端口 8080)
+
+> **批量管理**：View → Tool Windows → Services，点击 + → Run Configuration Type → Spring Boot，可同时查看和管理所有服务的运行状态。
+
+**方式 B：命令行运行**
 
 按以下顺序启动各服务：
 
@@ -153,7 +184,7 @@ mvn spring-boot:run
 
 # 4. 其他服务...
 
-# 5. API 网关
+# 5. API 网关（最后启动）
 cd api-gateway
 mvn spring-boot:run
 ```
