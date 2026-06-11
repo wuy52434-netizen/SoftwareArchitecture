@@ -53,26 +53,6 @@ journalctl -u library-gateway -f
 journalctl -u library-user -f
 ```
 
-#### Kubernetes 环境
-
-```bash
-# 查看 Pod 状态
-kubectl get pods -n library
-
-# 查看 Service 状态
-kubectl get services -n library
-
-# 查看 Deployment 状态
-kubectl get deployments -n library
-
-# 查看 Pod 详细信息
-kubectl describe pod <pod-name> -n library
-
-# 查看 Pod 日志
-kubectl logs <pod-name> -n library
-kubectl logs -f <pod-name> -n library
-```
-
 ### 服务启停操作
 
 #### Docker Compose
@@ -118,22 +98,6 @@ systemctl daemon-reload
 # 开机自启
 systemctl enable library-gateway
 systemctl disable library-gateway
-```
-
-#### Kubernetes
-
-```bash
-# 重启 Deployment
-kubectl rollout restart deployment/api-gateway -n library
-
-# 扩容/缩容
-kubectl scale deployment/api-gateway --replicas=3 -n library
-
-# 更新镜像
-kubectl set image deployment/api-gateway api-gateway=new-image:tag -n library
-
-# 回滚
-kubectl rollout undo deployment/api-gateway -n library
 ```
 
 ### 中间件状态检查
@@ -1243,17 +1207,20 @@ docker-compose -f docker-compose.staging.yml up -d
 
 #### 5. 生产发布
 
-**滚动发布（推荐）**：
+**Docker Compose 发布（推荐）**：
 
 ```bash
-# Kubernetes 滚动更新
-kubectl set image deployment/api-gateway api-gateway=library/api-gateway:1.0.0 -n library
+# 进入部署目录
+cd docker
 
-# 查看更新状态
-kubectl rollout status deployment/api-gateway -n library
+# 重新构建并启动服务
+docker-compose up -d --build
 
-# 如需回滚
-kubectl rollout undo deployment/api-gateway -n library
+# 查看更新后状态
+docker-compose ps
+
+# 查看关键服务日志
+docker-compose logs -f api-gateway
 ```
 
 **Docker Compose 蓝绿发布**：
@@ -1277,7 +1244,6 @@ docker-compose -p blue down
 ```bash
 # 检查服务状态
 docker-compose ps
-kubectl get pods -n library
 
 # 健康检查
 curl http://localhost:8080/actuator/health
@@ -1297,12 +1263,6 @@ curl -X POST http://localhost:8080/api/auth/login \
 docker-compose down
 docker-compose pull  # 如果使用镜像
 docker-compose up -d
-
-# Kubernetes 回滚
-kubectl rollout undo deployment/api-gateway -n library
-
-# 或指定版本回滚
-kubectl rollout undo deployment/api-gateway --to-revision=1 -n library
 ```
 
 #### 数据库回滚
@@ -1434,20 +1394,18 @@ gunzip < backup/mysql-all-databases-20240114.sql.gz | docker exec -i library-mys
 
 4. **快速扩容（如果是性能问题）**（3 分钟）
    ```bash
-   # Kubernetes 环境
-   kubectl scale deployment/api-gateway --replicas=5 -n library
-   
-   # 或增加资源限制
-   # 修改 docker-compose.yml，增加内存限制
+   # Docker Compose 环境：临时增加无状态服务实例
+   docker-compose up -d --scale api-gateway=2 --scale borrow-service=2
+
+   # 或修改 docker-compose.yml 中的内存限制后重启
+   docker-compose up -d
    ```
 
 5. **回滚版本（如果是新版本问题）**（5 分钟）
    ```bash
-   # 查看历史版本
-   kubectl rollout history deployment/api-gateway -n library
-   
-   # 回滚到上一个版本
-   kubectl rollout undo deployment/api-gateway -n library
+   # 切回上一个 Git 版本或 tag 后重新构建
+   git checkout <previous-tag-or-commit>
+   docker-compose up -d --build
    ```
 
 6. **验证恢复**（2 分钟）

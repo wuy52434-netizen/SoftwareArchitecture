@@ -9,7 +9,6 @@
 - [环境要求](#环境要求)
 - [快速部署（Docker Compose）](#快速部署docker-compose)
 - [手动部署](#手动部署)
-- [Kubernetes 部署](#kubernetes-部署)
 - [高可用部署](#高可用部署)
 - [配置说明](#配置说明)
 - [常见问题](#常见问题)
@@ -759,304 +758,18 @@ sudo systemctl restart nginx
 
 ---
 
-## Kubernetes 部署
+## 当前部署边界
 
-### 1. 准备 Kubernetes 集群
+本项目当前维护两种可执行部署方式：
 
-确保已安装：
-- Kubernetes 1.24+
-- Helm 3.8+
-- kubectl 配置正确
+| 部署方式 | 适用场景 | 说明 |
+|---|---|---|
+| Docker Compose | 推荐部署、答辩演示、远程仓库复现 | 使用 `docker/docker-compose.yml` 一次性启动前端、网关、业务服务和中间件 |
+| 手动部署 | 了解服务启动顺序或排查问题 | 需要手动安装 MySQL、Redis、RabbitMQ、Elasticsearch、Nacos、JDK、Maven 和 Nginx |
 
-### 2. 安装依赖组件
+远程仓库交付和答辩现场以 Docker Compose 为准。所有服务会运行在同一台机器的 Docker 网络中，由 Nginx 暴露 `http://localhost` 作为统一入口。
 
-#### MySQL
-
-```bash
-# 使用 Helm 安装 MySQL
-helm repo add bitnami https://charts.bitnami.com/bitnami
-
-helm install mysql bitnami/mysql \
-  --namespace library \
-  --create-namespace \
-  --set auth.rootPassword=root123 \
-  --set auth.database=library_db \
-  --set auth.username=library \
-  --set auth.password=library123 \
-  --set primary.persistence.size=20Gi
-```
-
-#### Redis
-
-```bash
-helm install redis bitnami/redis \
-  --namespace library \
-  --set auth.password=redis123 \
-  --set master.persistence.size=10Gi
-```
-
-#### RabbitMQ
-
-```bash
-helm install rabbitmq bitnami/rabbitmq \
-  --namespace library \
-  --set auth.username=admin \
-  --set auth.password=admin123 \
-  --set plugins=rabbitmq_management \
-  --set persistence.size=10Gi
-```
-
-#### Elasticsearch
-
-```bash
-helm install elasticsearch bitnami/elasticsearch \
-  --namespace library \
-  --set master.replicas=1 \
-  --set data.replicas=1 \
-  --set security.enabled=false \
-  --set master.persistence.size=30Gi \
-  --set data.persistence.size=30Gi
-```
-
-#### Nacos
-
-```bash
-# 或使用官方 Nacos Helm Chart
-```
-
-### 3. 创建 Kubernetes 部署文件
-
-**命名空间** `k8s/namespace.yaml`：
-
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: library
-  labels:
-    name: library
-```
-
-**配置映射** `k8s/configmap.yaml`：
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: library-config
-  namespace: library
-data:
-  SPRING_PROFILES_ACTIVE: "k8s"
-  MYSQL_HOST: "mysql.library.svc.cluster.local"
-  MYSQL_PORT: "3306"
-  MYSQL_DATABASE: "library_db"
-  REDIS_HOST: "redis-master.library.svc.cluster.local"
-  REDIS_PORT: "6379"
-  RABBITMQ_HOST: "rabbitmq.library.svc.cluster.local"
-  RABBITMQ_PORT: "5672"
-  ELASTICSEARCH_HOSTS: "elasticsearch-coordinating-only.library.svc.cluster.local:9200"
-  NACOS_SERVER_ADDR: "nacos.library.svc.cluster.local:8848"
-```
-
-**用户服务部署** `k8s/user-service.yaml`：
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: user-service
-  namespace: library
-  labels:
-    app: user-service
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: user-service
-  template:
-    metadata:
-      labels:
-        app: user-service
-    spec:
-      containers:
-      - name: user-service
-        image: your-registry/library/user-service:1.0.0
-        ports:
-        - containerPort: 8081
-        envFrom:
-        - configMapRef:
-            name: library-config
-        env:
-        - name: MYSQL_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: mysql
-              key: username
-        - name: MYSQL_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql
-              key: password
-        resources:
-          requests:
-            cpu: "250m"
-            memory: "256Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
-        livenessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8081
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8081
-          initialDelaySeconds: 10
-          periodSeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: user-service
-  namespace: library
-  labels:
-    app: user-service
-spec:
-  ports:
-  - port: 8081
-    targetPort: 8081
-  selector:
-    app: user-service
-```
-
-**API 网关部署** `k8s/api-gateway.yaml`：
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: api-gateway
-  namespace: library
-  labels:
-    app: api-gateway
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: api-gateway
-  template:
-    metadata:
-      labels:
-        app: api-gateway
-    spec:
-      containers:
-      - name: api-gateway
-        image: your-registry/library/api-gateway:1.0.0
-        ports:
-        - containerPort: 8080
-        envFrom:
-        - configMapRef:
-            name: library-config
-        resources:
-          requests:
-            cpu: "500m"
-            memory: "512Mi"
-          limits:
-            cpu: "1000m"
-            memory: "1Gi"
-        livenessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: api-gateway
-  namespace: library
-  labels:
-    app: api-gateway
-spec:
-  type: ClusterIP
-  ports:
-  - port: 8080
-    targetPort: 8080
-  selector:
-    app: api-gateway
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: library-ingress
-  namespace: library
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-spec:
-  rules:
-  - host: library.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: frontend
-            port:
-              number: 80
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: api-gateway
-            port:
-              number: 8080
-```
-
-### 4. 构建并推送镜像
-
-```bash
-# 登录镜像仓库
-docker login your-registry
-
-# 构建镜像（使用 Dockerfile）
-cd backend
-
-# 构建用户服务
-docker build -f Dockerfile.user -t your-registry/library/user-service:1.0.0 .
-
-# 构建其他服务...
-
-# 推送镜像
-docker push your-registry/library/user-service:1.0.0
-```
-
-### 5. 部署到 Kubernetes
-
-```bash
-# 创建命名空间
-kubectl apply -f k8s/namespace.yaml
-
-# 创建配置
-kubectl apply -f k8s/configmap.yaml
-
-# 部署各服务
-kubectl apply -f k8s/user-service.yaml
-kubectl apply -f k8s/book-service.yaml
-kubectl apply -f k8s/api-gateway.yaml
-
-# 查看部署状态
-kubectl get pods -n library
-kubectl get services -n library
-kubectl get ingress -n library
-
-# 查看日志
-kubectl logs -f deployment/user-service -n library
-```
+当前项目没有维护额外的集群编排部署文件；不要把未实际提供的集群部署脚本或命令作为交付内容。
 
 ---
 
@@ -1151,18 +864,24 @@ redis-sentinel sentinel.conf
 
 #### 多实例部署
 
-通过 Docker Compose 或 Kubernetes 部署多个实例：
+通过 Docker Compose 或传统多进程方式部署多个应用实例：
 
 ```yaml
-# Kubernetes Deployment
-spec:
-  replicas: 3  # 3 个实例
+# docker-compose.override.yml 示例
+services:
+  user-service-2:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.user
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=nacos:8848
 ```
 
 #### 负载均衡
 
-- **Kubernetes**：使用 Service + Ingress
-- **传统部署**：使用 Nginx 或 HAProxy
+- **Docker Compose**：多个服务容器接入同一个 Docker 网络，由 Nginx upstream 或网关进行转发
+- **传统部署**：使用 Nginx 或 HAProxy 分发到多个服务进程
 
 **Nginx 负载均衡配置**：
 
@@ -1403,13 +1122,6 @@ location / {
 }
 ```
 
-**Kubernetes Ingress 配置**：
-```yaml
-annotations:
-  nginx.ingress.kubernetes.io/rewrite-target: /
-  nginx.ingress.kubernetes.io/try-files: $uri $uri/ /index.html
-```
-
 ### Q6: Docker Compose 启动顺序问题
 
 **症状**：
@@ -1522,5 +1234,4 @@ server:
 - [Spring Boot 官方文档](https://spring.io/projects/spring-boot)
 - [Spring Cloud Alibaba 官方文档](https://github.com/alibaba/spring-cloud-alibaba)
 - [Docker 官方文档](https://docs.docker.com/)
-- [Kubernetes 官方文档](https://kubernetes.io/docs/)
 - [Nacos 官方文档](https://nacos.io/zh-cn/docs/)
