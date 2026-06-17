@@ -61,13 +61,6 @@ cd "E:\Ai Code\SoftwareArchitecture"
 5. 展开 `Lifecycle`。
 6. 先双击 `clean`。
 7. 再双击 `package`。
-8. 如果想跳过测试，在 Maven 面板顶部的运行配置里加入：
-
-```text
--DskipTests
-```
-
-打包成功后，确认这些文件存在：
 
 ```text
 backend/api-gateway/target/api-gateway-1.0.0.jar
