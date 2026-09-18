@@ -146,8 +146,28 @@ jobs:
           npm ci
           npm run build
 
-      - name: 跑全栈测试（脚本内负责起容器、等就绪、灌索引、执行各套件）
-        # 任何一个套件失败都会让这一步失败 —— 没有 `|| true`，不做"看起来绿"
+      - name: 环境自检（Docker / Compose / 资源 / 脚本前置）
+        # 失败定位用：把 runner 上 Docker 与 compose 真实的可用性打出来，
+        # 避免"容器根本没起来却看起来在跑测试"这种混淆。
+        run: |
+          set +e
+          echo "===== docker info ====="
+          docker info 2>&1 | head -30
+          echo "===== docker version ====="
+          docker version 2>&1 | head -20
+          echo "===== compose 探测 ====="
+          if docker compose version >/dev/null 2>&1; then echo "docker compose plugin: YES"; docker compose version; else echo "docker compose plugin: NO"; fi
+          if command -v docker-compose >/dev/null 2>&1; then echo "docker-compose(standalone): YES $(docker-compose version 2>&1 | head -1)"; else echo "docker-compose standalone: NO"; fi
+          echo "===== 磁盘/内存 ====="
+          df -h / | tail -2
+          free -h 2>/dev/null | head -3 || true
+          echo "===== assets ====="
+          ls -la test/scripts/run_all_tests.sh
+          echo "===== frontend dist ====="
+          ls -la frontend/dist/index.html 2>&1 | head -3
+
+      - name: 跑全栈测试（脚本内负责拉起容器、等就绪、灌索引、执行各套件）
+        # 任何一个套件失败都会让这一步失败——没有 `|| true`，不做"看起来绿"
         env:
           LIB_TEST_PYTHON: python3
         run: bash test/scripts/run_all_tests.sh api contract mq search e2e
