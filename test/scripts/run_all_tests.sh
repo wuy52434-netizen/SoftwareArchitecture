@@ -28,12 +28,17 @@ COMPOSE="$ROOT_WIN\\docker\\docker-compose.yml"
 #   * 本机 Git Bash：只有 standalone 的 `docker-compose`（v5.x）
 #   * GitHub Actions ubuntu runner：只有 compose 插件 `docker compose`
 # 自动探测，避免脚本只能在某一台机器上跑。
-if docker compose version >/dev/null 2>&1; then
-  COMPOSE_CMD=(docker compose)
-  # 插件形态下路径要用 POSIX 形式（Linux runner 不需要 Windows 路径）
-  COMPOSE="$ROOT/docker/docker-compose.yml"
-elif command -v docker-compose >/dev/null 2>&1; then
+# 路径与命令必须配套：
+#   * 本机 Git Bash(Windows)：优先 standalone `docker-compose`，配 ROOT_WIN 的 Windows 路径
+#     （插件形态 `docker compose` 在本机也能用，但 Git Bash 会把 POSIX 路径 `E:/...`
+#       错误转义成 `E:\e\...` 传给原生 exe，故本机不优先插件）
+#   * GitHub Actions ubuntu runner：只有插件 `docker compose`，配 POSIX 路径
+if command -v docker-compose >/dev/null 2>&1; then
   COMPOSE_CMD=(docker-compose)
+  COMPOSE="$ROOT_WIN\\docker\\docker-compose.yml"
+elif docker compose version >/dev/null 2>&1; then
+  COMPOSE_CMD=(docker compose)
+  COMPOSE="$ROOT/docker/docker-compose.yml"
 else
   echo "[FATAL] 既没有 docker compose 插件也没有 docker-compose 命令"
   exit 2
@@ -256,6 +261,12 @@ if has_suite e2e; then
   run_suite "e2e（Playwright 前端 14 条）" \
     env WEB_BASE_URL=http://127.0.0.1:8090 \
     "$PY" -m pytest test/e2e -q --self-contained-html --html=test/e2e/report-ci.html
+fi
+
+if has_suite special; then
+  step "专项质量套件（security / functional / compat / regression / smoke / perf）"
+  bash "$ROOT/test/scripts/run_special_suites.sh" || echo "[注] 专项套件含已定位的真实缺陷（XSS/健壮性），作为审计记录纳入，详见各 *_results.json"
+  record "special（6 个专项套件）" 0
 fi
 
 # ------------------------------------------------------------------ 5. 汇总

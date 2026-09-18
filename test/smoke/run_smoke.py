@@ -54,16 +54,32 @@ _test("图书详情", r.get("code") == 200 and "title" in (r.get("data") or {}),
 r = requests.get(BASE + "/api/search", params={"keyword": "三体"}, headers=H, timeout=8).json()
 _test("ES检索", r.get("code") == 200 and isinstance(r.get("data", {}).get("books"), list), f"code={r.get('code')}")
 
-# 6. 借阅闭环（用 user1 借一本可用书，单测覆盖业务分支，冒烟只验主链路可达+库存）
+# 6. 借阅闭环（用 user1 借一本可用书再归还；若已借满5本先归还1本腾额度）
 avail = None
 r = requests.get(BASE + "/api/books", params={"per_page": 20}, headers=H, timeout=8).json()
 for b in r["data"]["records"]:
     if b.get("availableCopies", 0) > 0 and b.get("status") == "available":
         avail = b; break
 borrow_id = None
+U1 = None
 if avail and TOKEN:
     u1 = requests.post(BASE + "/api/auth/login", headers=H, json={"username": "user1", "password": "123456"}, timeout=8).json()
     U1 = u1.get("data", {}).get("accessToken")
+    # 测试数据隔离：无论 user1 当前借阅多少，先循环归还其在借记录，避免 3003 额度污染
+    if U1:
+        try:
+            recs = requests.get(BASE + "/api/borrow-records", params={"userId": 11},
+                                headers={**H, "Authorization": f"Bearer {U1}"}, timeout=8).json()
+            actives = [x for x in ((recs.get("data") or {}).get("records") or [])
+                       if x.get("status") == "active"]
+            for rec in actives[:5]:
+                fid = rec.get("recordId")
+                if fid:
+                    requests.post(BASE + "/api/return",
+                                  headers={**H, "Authorization": f"Bearer {U1}"},
+                                  json={"borrowId": fid}, timeout=8)
+        except Exception:
+            pass
     r = requests.post(BASE + "/api/borrow", headers={**H, "Authorization": f"Bearer {U1}"},
                       json={"bookId": avail["id"], "userId": 11}, timeout=8).json()
     borrow_ok = r.get("code") == 200
@@ -74,9 +90,9 @@ if avail and TOKEN:
 else:
     _test("借书(核心业务)", False, "无可借图书" if not avail else "user1登录失败")
 
-# 7. 归还（自清理）
-if borrow_id:
-    r = requests.post(BASE + "/api/return", headers={**H, "Authorization": f"Bearer {TOKEN}"},
+# 7. 归还（自清理）—— 用 user1 自己的 token 归还，避免越权
+if borrow_id and U1:
+    r = requests.post(BASE + "/api/return", headers={**H, "Authorization": f"Bearer {U1}"},
                       json={"borrowId": borrow_id}, timeout=8).json()
     _test("归还(核心业务)", r.get("code") == 200, f"code={r.get('code')} msg={str(r.get('message'))[:30]}")
 else:
@@ -102,4 +118,8 @@ else:
 
 print("=" * 50)
 print(f"冒烟结果: PASS {PASS} / FAIL {FAIL}")
+# 统一汇总：向目录内写 smoke_results.json（供 run_special_suites.sh 汇总）
+with open("smoke_results.json", "w", encoding="utf-8") as f:
+    json.dump({"summary": {"total": PASS + FAIL, "pass": PASS, "fail": FAIL},
+               "cases": CASES}, f, ensure_ascii=False, indent=2)
 sys.exit(1 if FAIL else 0)

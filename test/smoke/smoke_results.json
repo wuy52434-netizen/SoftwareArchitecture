@@ -1,0 +1,59 @@
+{
+  "summary": {
+    "total": 10,
+    "pass": 10,
+    "fail": 0
+  },
+  "cases": [
+    {
+      "name": "网关/服务在线",
+      "pass": true,
+      "detail": "HTTP=200"
+    },
+    {
+      "name": "登录鉴权",
+      "pass": true,
+      "detail": "code=200 msg=登录成功"
+    },
+    {
+      "name": "图书列表分页",
+      "pass": true,
+      "detail": "code=200"
+    },
+    {
+      "name": "图书详情",
+      "pass": true,
+      "detail": "code=200"
+    },
+    {
+      "name": "ES检索",
+      "pass": true,
+      "detail": "code=200"
+    },
+    {
+      "name": "借书(核心业务)",
+      "pass": true,
+      "detail": "code=200 msg=借阅成功"
+    },
+    {
+      "name": "归还(核心业务)",
+      "pass": true,
+      "detail": "code=200 msg=归还成功"
+    },
+    {
+      "name": "统计看板",
+      "pass": true,
+      "detail": "code=200"
+    },
+    {
+      "name": "系统设置",
+      "pass": true,
+      "detail": "code=200"
+    },
+    {
+      "name": "用户管理(鉴权)",
+      "pass": true,
+      "detail": "code=200"
+    }
+  ]
+}

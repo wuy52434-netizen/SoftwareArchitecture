@@ -116,6 +116,16 @@ USER1 = request("POST", "/api/auth/login", json_body={"username": "user1", "pass
 U1TOKEN = USER1.get("data", {}).get("accessToken")
 u1id = USER1.get("data", {}).get("user", {}).get("userId", 11)
 
+# 隔离测试数据：把 user1 的全部在借记录归还，清空额度，保证借阅闭环不因历史数据干扰
+if U1TOKEN:
+    try:
+        _recs = request("GET", "/api/borrow-records", params={"userId": u1id}, token=U1TOKEN).json()
+        for _x in ((_recs.get("data") or {}).get("records") or []):
+            if _x.get("status") == "active" and _x.get("recordId"):
+                request("POST", "/api/return", token=U1TOKEN, json_body={"borrowId": _x["recordId"]})
+    except Exception:
+        pass
+
 avail_book = None
 for bk in request("GET", "/api/books", params={"per_page": 10}).json()["data"]["records"]:
     if bk.get("availableCopies", 0) > 0 and bk.get("status") == "available":
@@ -128,6 +138,9 @@ if avail_book and U1TOKEN:
          f"code={r.get('code')} msg={r.get('message')}")
     bdata = r.get("data") or {}
     borrow_id = bdata.get("id") or bdata.get("recordId")
+    # 自清理：借完即归还，避免持续占用 user1 借阅额度
+    if borrow_id:
+        request("POST", "/api/return", token=U1TOKEN, json_body={"borrowId": borrow_id})
 else:
     test("BORROW-FN-01", "借书", bool(avail_book), "无可借图书" if not avail_book else "user1登录失败")
 
