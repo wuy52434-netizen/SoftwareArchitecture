@@ -1,6 +1,7 @@
 package com.library.borrow.service;
 
 import com.alibaba.csp.sentinel.annotation.SentinelResource;
+import com.alibaba.csp.sentinel.slots.block.BlockException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.library.borrow.client.BookClient;
@@ -339,9 +340,17 @@ public class BorrowService {
     public void sendBorrowEvent(BorrowRecord record, String eventType) {
         try {
             String routingKey = "success".equals(eventType) ? ROUTING_KEY_BORROW_SUCCESS : ROUTING_KEY_BORROW_RETURN;
+            String eventTypeName = "success".equals(eventType) ? "BORROW_SUCCESS" : "RETURN_SUCCESS";
 
             java.util.Map<String, Object> message = new java.util.HashMap<>();
-            message.put("eventType", "success".equals(eventType) ? "BORROW_SUCCESS" : "RETURN_SUCCESS");
+            message.put("eventType", eventTypeName);
+            // ---- 幂等相关字段（KNWN-MQ-03 修复）----
+            // messageId：本次投递的唯一标识，仅用于链路追踪。
+            message.put("messageId", java.util.UUID.randomUUID().toString());
+            // idempotentKey：**由业务事实派生**的确定性幂等键，消费端据此去重。
+            // 刻意不用随机 UUID —— 生产端重试会生成新 UUID，去重就失效了；
+            // 同一笔借阅记录的同一种事件，无论重投多少次这个 key 都不变。
+            message.put("idempotentKey", eventTypeName + ":" + record.getRecordId());
             message.put("recordId", record.getRecordId());
             message.put("userId", record.getUserId());
             message.put("bookId", record.getBookId());
@@ -353,7 +362,8 @@ public class BorrowService {
             message.put("timestamp", System.currentTimeMillis());
 
             rabbitTemplate.convertAndSend(EXCHANGE_BORROW, routingKey, message);
-            log.info("借阅事件发送成功: eventType={}, recordId={}", eventType, record.getRecordId());
+            log.info("借阅事件发送成功: eventType={}, recordId={}, idempotentKey={}",
+                    eventType, record.getRecordId(), message.get("idempotentKey"));
         } catch (Exception e) {
             log.warn("借阅事件发送失败(不影响核心借还流程): {}", e.getMessage());
         }
@@ -434,7 +444,7 @@ public class BorrowService {
         return response;
     }
 
-    public BorrowRecord borrowBlockHandler(Long userId, BorrowRequest request, Throwable e) {
+    public BorrowRecord borrowBlockHandler(Long userId, BorrowRequest request, BlockException e) {
         log.warn("借书请求被限流: userId={}, bookId={}", userId, request.getBookId());
         throw new BusinessException(ResultCode.SYSTEM_BUSY);
     }

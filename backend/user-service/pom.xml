@@ -14,6 +14,11 @@
     <name>用户服务</name>
     <description>用户管理、登录认证、权限控制</description>
 
+    <properties>
+        <!-- 本模块有 7 条单元测试，实测行覆盖率约 19%，门禁锁定在 15% 做棘轮保护 -->
+        <jacoco.line.coveredratio.minimum>0.15</jacoco.line.coveredratio.minimum>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.library</groupId>

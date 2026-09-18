@@ -1,0 +1,8 @@
+# 测试依赖（版本为 2026-09 实测可用版本）
+pytest==9.1.1
+playwright==1.63.0
+pytest-playwright==0.9.0
+pytest-html==4.2.0
+
+# 安装浏览器（首次需执行一次）：
+#   playwright install chromium

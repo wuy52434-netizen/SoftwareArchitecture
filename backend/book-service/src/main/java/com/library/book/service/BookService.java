@@ -6,6 +6,7 @@ import com.library.book.dto.BookDTO.*;
 import com.library.book.entity.BookCategory;
 import com.library.book.entity.BookCopy;
 import com.library.book.entity.BookInfo;
+import com.library.book.event.BookChangedEvent;
 import com.library.book.mapper.BookCopyMapper;
 import com.library.book.mapper.BookInfoMapper;
 import com.library.common.exception.BusinessException;
@@ -13,6 +14,7 @@ import com.library.common.result.ResultCode;
 import com.library.common.util.RedisUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +35,8 @@ public class BookService {
     private final BookCopyMapper bookCopyMapper;
     private final RedisUtil redisUtil;
     private final RedisTemplate<String, Object> redisTemplate;
+    /** 图书变更事件发布器（KNWN-ES-01）：让 search-service 能同步 ES 索引 */
+    private final ApplicationEventPublisher eventPublisher;
 
     public BookInfo getById(Long id) {
         String cacheKey = REDIS_BOOK_DETAIL_KEY + id;
@@ -138,6 +142,8 @@ public class BookService {
         log.info("图书创建成功: id={}, title={}", book.getId(), book.getTitle());
         
         clearBookCache();
+        // 新书必须进索引，否则借书机（ES 链路）搜不到刚上架的书（KNWN-ES-01）
+        eventPublisher.publishEvent(BookChangedEvent.upsert(book.getId()));
         return book;
     }
 
@@ -202,6 +208,9 @@ public class BookService {
         log.info("图书更新成功: id={}", id);
         clearBookCache();
         redisUtil.delete(REDIS_BOOK_DETAIL_KEY + id);
+
+        // 改过的书需要重写索引，否则检索结果里长期保留旧标题（KNWN-ES-01）
+        eventPublisher.publishEvent(BookChangedEvent.upsert(id));
         
         return book;
     }
@@ -219,6 +228,8 @@ public class BookService {
         log.info("图书删除成功: id={}", id);
         clearBookCache();
         redisUtil.delete(REDIS_BOOK_DETAIL_KEY + id);
+        // 删除必须同步移除索引，否则检索会返回"点进去 404"的幽灵记录（KNWN-ES-01）
+        eventPublisher.publishEvent(BookChangedEvent.delete(id));
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -245,6 +256,8 @@ public class BookService {
         log.info("图书库存更新: id={}, change={}, available={}", bookId, change, newAvailable);
         clearBookCache();
         redisUtil.delete(REDIS_BOOK_DETAIL_KEY + bookId);
+        // 库存/状态变化要反映到索引（前端按 availableCopies + status 展示"可借/已借完"）
+        eventPublisher.publishEvent(BookChangedEvent.upsert(bookId));
     }
 
     private static final Map<Long, String> CATEGORY_NAME_MAP = Map.of(
@@ -304,6 +317,8 @@ public class BookService {
 
         clearBookCache();
         redisUtil.delete(REDIS_BOOK_DETAIL_KEY + bookId);
+        // 借出会改变 availableCopies/status，索引必须跟上（KNWN-ES-01）
+        eventPublisher.publishEvent(BookChangedEvent.upsert(bookId));
     }
 
     public BookCopy getAvailableCopyByBookId(Long bookId) {
@@ -388,6 +403,8 @@ public class BookService {
 
         clearBookCache();
         redisUtil.delete(REDIS_BOOK_DETAIL_KEY + bookId);
+        // 归还同样改变可借数量与状态，索引必须跟上（KNWN-ES-01）
+        eventPublisher.publishEvent(BookChangedEvent.upsert(bookId));
     }
 
     public BookCopy getCopyById(Long copyId) {

@@ -44,6 +44,7 @@ spring:
       transport:
         dashboard: ${SENTINEL_DASHBOARD_SERVER:localhost:8858}
         port: 8719
+        client-ip: ${SENTINEL_CLIENT_IP:}
       eager: true
       filter:
         enabled: true

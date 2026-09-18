@@ -20,6 +20,16 @@ spring:
       filter:
         enabled: true
 
+  # Redis：消费端幂等去重（KNWN-MQ-03）。去重键必须跨实例共享，
+  # 不能用进程内 Map —— 多副本时每个副本都会认为自己是"第一次见过"。
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 10000ms
+
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}

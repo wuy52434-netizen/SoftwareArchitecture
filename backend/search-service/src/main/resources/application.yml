@@ -28,6 +28,17 @@ spring:
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
     virtual-host: /
+    listener:
+      simple:
+        acknowledge-mode: auto
+        prefetch: 1
+        # 索引写入失败要重试，最终进 queue.book.sync.dlq（KNWN-ES-01 的配套）
+        retry:
+          enabled: true
+          max-attempts: 5
+          initial-interval: 1000
+          multiplier: 2
+          max-interval: 10000
 
   cloud:
     nacos:

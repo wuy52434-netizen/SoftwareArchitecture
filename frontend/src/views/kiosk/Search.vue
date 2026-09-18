@@ -17,13 +17,14 @@
         placeholder="输入书名、作者或ISBN进行搜索"
         size="large"
         class="main-search"
+        data-testid="kiosk-search-input"
         @keyup.enter="searchBooks"
       >
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
         <template #append>
-          <el-button type="primary" @click="searchBooks" :loading="loading">
+          <el-button type="primary" data-testid="kiosk-search-submit" @click="searchBooks" :loading="loading">
             搜索
           </el-button>
         </template>
@@ -55,10 +56,10 @@
       </div>
     </div>
 
-    <div class="results-section" v-if="searched">
+    <div class="results-section" v-if="searched" data-testid="kiosk-search-results">
       <div class="results-header">
         <div class="results-info">
-          共找到 <span class="highlight">{{ pagination.total }}</span> 本图书
+          共找到 <span class="highlight" data-testid="kiosk-search-total">{{ pagination.total }}</span> 本图书
         </div>
         <div class="results-sort">
           <span>排序：</span>
@@ -173,7 +174,8 @@ import {
   ArrowLeft,
   Search
 } from '@element-plus/icons-vue'
-import * as booksApi from '@/api/books'
+// 前端搜索接入 Elasticsearch（search-service /api/search），替代原来的 MySQL 检索
+import * as searchApi from '@/api/search'
 
 const router = useRouter()
 
@@ -222,30 +224,48 @@ async function searchBooks() {
   searched.value = true
 
   try {
+    // 走 Elasticsearch：keyword 命中标题/作者/摘要并带高亮
     const params = {
-      search: searchForm.keyword,
+      keyword: searchForm.keyword,
       page: searchForm.page,
-      perPage: searchForm.perPage
+      size: searchForm.perPage
     }
 
     if (searchForm.category) {
       params.category = searchForm.category
     }
 
-    const response = await booksApi.getBooks(params)
-    books.value = response.records || response.books || []
-    pagination.total = response.total || response.pagination?.total || 0
-    pagination.pages = response.pages || response.pagination?.pages || 0
+    const response = await searchApi.searchBooks(params)
+    // ES 返回结构: { books:[...], total, page, size, pages }
+    books.value = response.books || response.records || []
+    pagination.total = response.total || 0
+    pagination.pages = response.pages || Math.ceil(pagination.total / searchForm.perPage) || 0
   } catch (error) {
-    ElMessage.error('搜索失败')
-    console.error('搜索失败:', error)
+    // ES 检索失败时兜底退回 MySQL 检索（booksApi），保证功能不中断
+    console.warn('ES 检索失败，回退 MySQL:', error)
+    try {
+      const params = {
+        search: searchForm.keyword,
+        page: searchForm.page,
+        perPage: searchForm.perPage
+      }
+      if (searchForm.category) params.category = searchForm.category
+      const fb = await (await import('@/api/books')).getBooks(params)
+      books.value = fb.records || fb.books || []
+      pagination.total = fb.total || 0
+      pagination.pages = fb.pages || 0
+    } catch (e2) {
+      ElMessage.error('搜索失败')
+      console.error('兜底搜索失败:', e2)
+    }
   } finally {
     loading.value = false
   }
 }
 
 function getCoverImage(book) {
-  return book.cover_url || book.coverImage || `/static/images/${book.title}.jpg`
+  // ES 返回 coverUrl (小驼峰)，MySQL 返回 cover_url；统一兼容
+  return book.coverUrl || book.cover_url || book.coverImage || `/static/images/${book.title}.jpg`
 }
 
 function getStockStatus(book) {

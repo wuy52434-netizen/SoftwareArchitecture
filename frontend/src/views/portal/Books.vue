@@ -16,6 +16,7 @@
           prefix-icon="Search"
           size="large"
           clearable
+          data-testid="books-search-input"
           @keyup.enter="handleSearch"
           @clear="handleSearch"
         />
@@ -61,7 +62,7 @@
 
     <div class="result-bar">
       <div class="result-info">
-        共找到 <span class="highlight-number">{{ pagination.total }}</span> 本图书
+        共找到 <span class="highlight-number" data-testid="books-total-count">{{ pagination.total }}</span> 本图书
       </div>
       <div class="display-options">
         <span>每页显示：</span>
@@ -73,11 +74,12 @@
       </div>
     </div>
 
-    <div class="books-grid" v-loading="loading">
+    <div class="books-grid" v-loading="loading" data-testid="books-grid">
       <div
         v-for="book in books"
         :key="book.id"
         class="book-card"
+        data-testid="book-card"
         @click="viewBookDetail(book)"
       >
         <div
@@ -92,8 +94,8 @@
           </span>
         </div>
         <div class="book-info">
-          <div class="book-title">{{ book.title }}</div>
-          <div class="book-author">{{ book.author }}</div>
+          <div class="book-title" data-testid="book-card-title">{{ book.title }}</div>
+          <div class="book-author" data-testid="book-card-author">{{ book.author }}</div>
           <div class="book-publisher">{{ book.publisher }} · {{ getPublishYear(book) }}</div>
           <div class="book-tags">
             <span class="tag tag-category">{{ book.category }}</span>
@@ -123,11 +125,11 @@
       </div>
     </div>
 
-    <div class="empty-state" v-if="!loading && books.length === 0">
+    <div class="empty-state" v-if="!loading && books.length === 0" data-testid="books-empty-state">
       <el-empty description="未找到匹配的图书，请调整搜索条件" />
     </div>
 
-    <div class="pagination-container" v-if="pagination.pages > 1">
+    <div class="pagination-container" v-if="pagination.pages > 1" data-testid="books-pagination">
       <el-pagination
         v-model:current-page="searchForm.page"
         v-model:page-size="searchForm.perPage"

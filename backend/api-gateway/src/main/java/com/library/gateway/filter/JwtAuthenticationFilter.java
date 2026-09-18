@@ -60,11 +60,11 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         String token = extractToken(request);
         if (!StringUtils.hasText(token)) {
-            if (isWhiteList(path)) {
-                log.debug("白名单路径且未携带 Token，跳过认证: {}", path);
+            if (isWhiteList(method, path)) {
+                log.debug("白名单路径且未携带 Token，跳过认证: {} {}", method, path);
                 return chain.filter(exchange);
             }
-            log.warn("未找到 Token，路径: {}", path);
+            log.warn("未找到 Token，请求: {} {}", method, path);
             return writeUnauthorizedResponse(exchange.getResponse(), "未登录或Token已过期");
         }
 
@@ -100,8 +100,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         } catch (Exception e) {
             log.error("Token 验证失败: {}", e.getMessage());
-            if (isWhiteList(path)) {
-                log.debug("白名单路径携带无效 Token，按匿名请求放行: {}", path);
+            if (isWhiteList(method, path)) {
+                log.debug("白名单路径携带无效 Token，按匿名请求放行: {} {}", method, path);
                 return chain.filter(exchange);
             }
             return writeUnauthorizedResponse(exchange.getResponse(), "Token无效或已过期");
@@ -121,19 +121,69 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         return null;
     }
 
-    private boolean isWhiteList(String path) {
+    /**
+     * 白名单条目支持两种写法：
+     * <ul>
+     *   <li>{@code METHOD /path} —— 仅该 HTTP 方法匿名放行（推荐）</li>
+     *   <li>{@code /path} —— 任意方法匿名放行（历史写法，仅为兼容保留）</li>
+     * </ul>
+     *
+     * <p>为什么要按方法区分：原先只比路径、不比方法，于是 {@code /api/settings} 一旦进白名单，
+     * 连 {@code PUT} 也免鉴权 —— 任何匿名调用方都能改借阅天数与罚款标准（KNWN-SEC-02）。
+     * 只读接口匿名放行是产品需求（借书机终端与门户浏览），写接口必须鉴权，两者不能混为一谈。
+     */
+    private boolean isWhiteList(String method, String path) {
         List<String> whiteList = gatewayProperties.getWhiteList();
         if (whiteList == null || whiteList.isEmpty()) {
-            log.warn("白名单为空，对路径 {} 使用内置白名单判断", path);
-            return path.startsWith("/api/auth/") || path.startsWith("/api/books")
-                || path.startsWith("/api/search") || path.startsWith("/api/settings")
-                || path.startsWith("/api/borrow") || path.startsWith("/api/return")
-                || path.startsWith("/api/categories") || path.equals("/error");
+            log.warn("白名单为空，对 {} {} 使用内置白名单判断", method, path);
+            return matchesBuiltinWhiteList(method, path);
         }
-        for (String pattern : whiteList) {
-            if (pathMatcher.match(pattern, path)) {
+        for (String entry : whiteList) {
+            if (matchesEntry(entry, method, path)) {
                 return true;
             }
+        }
+        return false;
+    }
+
+    private boolean matchesEntry(String entry, String method, String path) {
+        if (!StringUtils.hasText(entry)) {
+            return false;
+        }
+        String trimmed = entry.trim();
+        int separator = trimmed.indexOf(' ');
+        if (separator < 0) {
+            return pathMatcher.match(trimmed, path);
+        }
+        String entryMethod = trimmed.substring(0, separator).trim();
+        String entryPath = trimmed.substring(separator + 1).trim();
+        if (!StringUtils.hasText(entryPath)) {
+            return false;
+        }
+        return entryMethod.equalsIgnoreCase(method) && pathMatcher.match(entryPath, path);
+    }
+
+    /**
+     * 配置缺失时的兜底：只放行确定的只读路径与鉴权入口。
+     * 绝不再按"路径前缀"把写操作一起放行 —— 那正是 KNWN-SEC-02 的成因。
+     */
+    private boolean matchesBuiltinWhiteList(String method, String path) {
+        if ("GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method)) {
+            return path.equals("/error")
+                || path.startsWith("/api/books")
+                || path.startsWith("/api/categories")
+                || path.startsWith("/api/search")
+                || path.startsWith("/api/settings")
+                || path.startsWith("/api/borrow-records")
+                || path.startsWith("/api/users/card");
+        }
+        if ("POST".equalsIgnoreCase(method)) {
+            return path.startsWith("/api/auth/login")
+                || path.startsWith("/api/auth/register")
+                || path.startsWith("/api/auth/refresh")
+                // 借书机终端：刷读者卡自助借还，身份由卡号决定，故写操作匿名放行
+                || path.equals("/api/borrow") || path.startsWith("/api/borrow/")
+                || path.equals("/api/return") || path.startsWith("/api/return/");
         }
         return false;
     }

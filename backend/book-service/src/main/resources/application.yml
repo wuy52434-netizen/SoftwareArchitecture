@@ -25,6 +25,14 @@ spring:
       database: 0
       timeout: 10000ms
 
+  # 图书变更事件发往 book.exchange，由 search-service 消费并同步 ES 索引（KNWN-ES-01）
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: /
+
   cloud:
     nacos:
       discovery:

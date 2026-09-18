@@ -96,23 +96,36 @@ jwt:
   refresh-token-expire: 604800000
 
 auth-filter:
+  # 白名单条目格式（见 JwtAuthenticationFilter#isWhiteList）：
+  #   "METHOD /path" —— 仅该 HTTP 方法匿名放行（推荐，必须用这种）
+  #   "/path"        —— 任意方法匿名放行（历史写法，仅为兼容保留，不要新增）
+  #
+  # 原实现只比路径不比方法，于是 /api/settings 一进白名单，连 PUT 也免鉴权，
+  # 匿名调用方即可改借阅天数与罚款标准（缺陷 KNWN-SEC-02）。此处按方法收权：
+  # 只读接口匿名、写接口一律走鉴权。
   whiteList:
-    - /api/auth/login
-    - /api/auth/register
-    - /api/auth/refresh
-    - /api/books
-    - /api/books/**
-    - /api/search
-    - /api/search/**
-    - /api/settings
-    - /api/settings/**
-    - /api/borrows/**
-    - /api/borrow/**
-    - /api/return/**
-    - /api/borrow-records/**
-    - /api/categories/**
-    - /api/users/card/**
-    - /error
+    # ---- 鉴权入口：未登录就必须能调，否则无法登录
+    - POST /api/auth/login
+    - POST /api/auth/register
+    - POST /api/auth/refresh
+    # ---- 只读资源：借书机终端自助浏览与门户列表需要匿名读
+    - GET /api/books
+    - GET /api/books/**
+    - GET /api/categories/**
+    - GET /api/search
+    - GET /api/search/**
+    # 借书机「归还」页与门户页面启动时要读借阅规则，属只读；
+    # 但 PUT /api/settings（改规则）必须鉴权 —— 这是本次收敛的关键一条
+    - GET /api/settings
+    - GET /api/settings/**
+    - GET /api/borrow-records/**
+    - GET /api/users/card/**
+    - GET /error
+    # ---- 借书机终端写操作：刷读者卡自助借还，身份由卡号决定，因此匿名放行属产品设计
+    - POST /api/borrow
+    - POST /api/borrow/**
+    - POST /api/return
+    - POST /api/return/**
 
 management:
   endpoints:

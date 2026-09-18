@@ -1,0 +1,48 @@
+{
+  "_comment": [
+    "books 索引的权威 mapping —— 唯一事实来源。",
+    "两个使用方都必须读这份文件，不允许各自内联一份：",
+    "  1. search-service 启动时用它建索引（IndexBootstrap）",
+    "  2. 脚本 seed_es_books.py 重新灌数据时用它重建索引",
+    "字段集合与 backend/search-service/src/main/java/com/library/search/document/BookDocument.java 一一对应。",
+    "分词器说明：本环境无法安装 IK 插件（插件包下载被网络策略阻断），因此中文文本字段",
+    "统一使用 Elasticsearch 内置 standard 分析器。需要启用 IK 时：给 ES 镜像装上与版本一致的",
+    "elasticsearch-analysis-ik 插件，然后把下面 title/author/summary 的 analyzer 改为 ik_max_word、",
+    "search_analyzer 改为 ik_smart，并同步修改 BookDocument 的注解。",
+    "ES-03 教训：运行时 mapping 必须覆盖实体声明的全部字段 —— 原先缺 updatedAt，",
+    "导致按更新时间排序/过滤的查询拿不到数据。"
+  ],
+  "mappings": {
+    "properties": {
+      "id": { "type": "long" },
+      "isbn": { "type": "keyword" },
+      "title": {
+        "type": "text",
+        "analyzer": "standard",
+        "search_analyzer": "standard",
+        "fields": { "kw": { "type": "keyword" } }
+      },
+      "author": {
+        "type": "text",
+        "analyzer": "standard",
+        "search_analyzer": "standard",
+        "fields": { "kw": { "type": "keyword" } }
+      },
+      "publisher": { "type": "keyword" },
+      "publishDate": { "type": "integer" },
+      "category": { "type": "keyword" },
+      "summary": {
+        "type": "text",
+        "analyzer": "standard",
+        "search_analyzer": "standard"
+      },
+      "price": { "type": "float" },
+      "coverUrl": { "type": "keyword", "index": false },
+      "status": { "type": "keyword" },
+      "availableCopies": { "type": "integer" },
+      "borrowCount": { "type": "integer" },
+      "createdAt": { "type": "date", "format": "yyyy-MM-dd||strict_date_optional_time" },
+      "updatedAt": { "type": "date", "format": "yyyy-MM-dd||strict_date_optional_time" }
+    }
+  }
+}

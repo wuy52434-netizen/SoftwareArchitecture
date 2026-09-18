@@ -1,5 +1,7 @@
 package com.library.stats.service;
 
+import com.library.common.result.Result;
+import com.library.stats.client.BookClient;
 import com.library.stats.dto.ChartData;
 import com.library.stats.dto.DashboardStats;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import java.util.*;
 public class StatsService {
 
     private final StringRedisTemplate stringRedisTemplate;
+    private final BookClient bookClient;
 
     private static final String KEY_STATS_PREFIX = "stats:";
     private static final String KEY_BORROW_TREND = KEY_STATS_PREFIX + "trend:borrow";
@@ -32,8 +35,11 @@ public class StatsService {
     public DashboardStats getDashboardStats() {
         DashboardStats stats = new DashboardStats();
 
-        stats.setTotalBooks(getCounter("total:books", 24L));
-        stats.setAvailableBooks(getCounter("available:books", 24L));
+        // 图书数取自图书服务（唯一权威源），与 `GET /api/books` 的 total 同源同口径。
+        // 修复前这里是 getCounter("total:books", 24L) —— 读本地 Redis 计数器，
+        // 初值还是硬编码 24，所以看板永远与图书接口对不上（实测 24 vs 25）。
+        stats.setTotalBooks(resolveBookCount(bookClient.listBooks(1, 1, null), "total:books"));
+        stats.setAvailableBooks(resolveBookCount(bookClient.listBooks(1, 1, "available"), "available:books"));
         stats.setTotalUsers(getCounter("total:users", 1L));
         stats.setTotalBorrows(getCounter("total:borrows", 0L));
         stats.setActiveBorrows(getCounter("active:borrows", 0L));
@@ -80,7 +86,6 @@ public class StatsService {
     private List<ChartData> getBorrowTrend() {
         List<ChartData> trend = new ArrayList<>();
         LocalDate today = LocalDate.now();
-        boolean hasHistoryData = false;
 
         for (int i = 6; i >= 0; i--) {
             LocalDate date = today.minusDays(i);
@@ -89,33 +94,23 @@ public class StatsService {
 
             Object value = stringRedisTemplate.opsForHash().get(KEY_BORROW_TREND, dateKey);
             long count = parseLong(value, 0L);
-            if (i > 0 && count > 0) hasHistoryData = true;
 
             trend.add(ChartData.of(label, count));
         }
 
-        if (!hasHistoryData) {
-            int[] pattern = {5, 8, 3, 6, 9, 4};
-            for (int i = 0; i < 6; i++) {
-                trend.get(i).setValue((long) pattern[i]);
-            }
-        }
-
+        // 修复 KNWN-DEF-02：原先在"没有历史数据"时用一段写死的波形 {5,8,3,6,9,4} 填充，
+        // 前端把它当真实趋势展示 —— 这是编造统计。没有数据就应当显示 0，
+        // 由前端呈现"暂无数据"，而不是让系统伪造一个好看但虚假的走势。
         return trend;
     }
 
     private List<ChartData> getCategoryDistribution() {
         Map<Object, Object> categoryMap = stringRedisTemplate.opsForHash().entries(KEY_CATEGORY_DISTRIBUTION);
 
+        // 同上：原先在 map 为空时返回一组写死的分类分布（文学 6 / 科技 9 / ...），已移除。
         if (categoryMap.isEmpty()) {
-            return Arrays.asList(
-                    ChartData.of("文学", 6),
-                    ChartData.of("科技", 9),
-                    ChartData.of("历史", 4),
-                    ChartData.of("艺术", 4),
-                    ChartData.of("教育", 3),
-                    ChartData.of("其他", 1)
-            );
+            log.debug("分类分布暂无统计数据（未收到借阅事件），返回空列表而非编造值");
+            return Collections.emptyList();
         }
 
         List<ChartData> result = new ArrayList<>();
@@ -123,28 +118,29 @@ public class StatsService {
         return result;
     }
 
+    /**
+     * 用户类型分布。
+     *
+     * <p>修复 KNWN-DEF-02：原实现直接返回写死的 65/20/15，**从不查库**，
+     * 与真实用户表毫无关系，却作为"统计"展示在管理后台。
+     *
+     * <p>为什么现在返回空列表而不是"顺手算一下"：真实数据在 user-service，
+     * 其 {@code GET /api/users} 受 {@code @PreAuthorize("hasRole('ADMIN')")} 保护
+     * （实测内部无鉴权调用返回 500）。要取这份数据必须先建立**服务间鉴权**
+     * （例如 service token 或内部专用只读接口），那是安全设计任务；
+     * 在它完成之前，正确的做法是明确"暂无数据"，而不是继续编造。
+     */
     private List<ChartData> getUserTypeDistribution() {
-        return Arrays.asList(
-                ChartData.of("学生", 65),
-                ChartData.of("教师", 20),
-                ChartData.of("其他", 15)
-        );
+        log.debug("用户类型分布需要 user-service 的服务间鉴权接口，暂以空列表表示「暂无数据」");
+        return Collections.emptyList();
     }
 
     private List<ChartData> getPopularBooks() {
         Set<String> popularBooks = stringRedisTemplate.opsForZSet().reverseRange(KEY_POPULAR_BOOKS, 0, 9);
 
+        // 原先在无数据时返回写死的热门榜（三体 12 / 活着 9 / ...），同样属于编造，已移除。
         if (popularBooks == null || popularBooks.isEmpty()) {
-            return Arrays.asList(
-                    ChartData.of("三体", 12),
-                    ChartData.of("活着", 9),
-                    ChartData.of("百年孤独", 8),
-                    ChartData.of("人类简史", 7),
-                    ChartData.of("算法导论", 6),
-                    ChartData.of("明朝那些事儿", 5),
-                    ChartData.of("深度学习", 4),
-                    ChartData.of("解忧杂货店", 3)
-            );
+            return Collections.emptyList();
         }
 
         List<ChartData> result = new ArrayList<>();
@@ -157,25 +153,15 @@ public class StatsService {
 
     private List<ChartData> getHourlyDistribution() {
         List<ChartData> distribution = new ArrayList<>();
-        boolean hasData = false;
 
         for (int hour = 8; hour <= 20; hour++) {
             String hourKey = String.format("%02d", hour);
             Object value = stringRedisTemplate.opsForHash().get(KEY_HOURLY_DISTRIBUTION, hourKey);
             long count = parseLong(value, 0L);
-            if (count > 0) hasData = true;
             distribution.add(ChartData.of(hourKey + ":00", count));
         }
 
-        if (!hasData) {
-            int[] pattern = {2, 4, 7, 5, 2, 6, 10, 8, 7, 5, 4, 3, 2};
-            distribution.clear();
-            for (int i = 0; i < pattern.length; i++) {
-                String hourKey = String.format("%02d:00", i + 8);
-                distribution.add(ChartData.of(hourKey, (long) pattern[i]));
-            }
-        }
-
+        // 原先在整点为 0 时用写死的分布覆盖，已移除（KNWN-DEF-02）。
         return distribution;
     }
 
@@ -186,6 +172,23 @@ public class StatsService {
         activity.put("注册用户", 0L);
         activity.put("新图书", 0L);
         return activity;
+    }
+
+    /**
+     * 取权威图书数；图书服务不可用时退回本地计数器并告警。
+     *
+     * <p>降级时刻意"退回旧值 + 告警"而不是返回 0：看板上出现 0 会被当成"库空了"，
+     * 而略旧的真实值不会误导人，配合告警日志即可定位。
+     */
+    private long resolveBookCount(Result<BookClient.BookPage> result, String counterKey) {
+        if (result != null && result.isSuccess()
+                && result.getData() != null && result.getData().getTotal() != null) {
+            return result.getData().getTotal();
+        }
+        long fallback = getCounter(counterKey, 0L);
+        log.warn("图书服务计数不可用，看板退回本地计数器 {}={}（口径可能与 /api/books 不一致）",
+                counterKey, fallback);
+        return fallback;
     }
 
     private long getCounter(String key, long defaultValue) {

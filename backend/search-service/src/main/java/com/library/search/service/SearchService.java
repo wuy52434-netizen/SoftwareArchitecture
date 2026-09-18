@@ -124,7 +124,10 @@ public class SearchService {
             );
             log.info("图书索引创建成功: id={}", document.getId());
         } catch (Exception e) {
-            log.error("图书索引创建失败: {}", e.getMessage());
+            // 必须抛出：消费端据此触发重试/死信。原先只 log 不抛，等于失败被静默吞掉，
+            // 索引与数据库会悄悄漂移（KNWN-ES-01 的成因之一）。
+            log.error("图书索引创建失败: id={}, err={}", document.getId(), e.getMessage());
+            throw new IllegalStateException("图书索引创建失败: id=" + document.getId(), e);
         }
     }
 
@@ -135,8 +138,17 @@ public class SearchService {
                     .id(String.valueOf(bookId))
             );
             log.info("图书索引删除成功: id={}", bookId);
+        } catch (co.elastic.clients.elasticsearch._types.ElasticsearchException e) {
+            // 文档本来就不在索引里时删除会 404，这是幂等场景，不算失败
+            if (e.status() == 404) {
+                log.info("索引中不存在该书，跳过删除: id={}", bookId);
+                return;
+            }
+            log.error("图书索引删除失败: id={}, err={}", bookId, e.getMessage());
+            throw new IllegalStateException("图书索引删除失败: id=" + bookId, e);
         } catch (Exception e) {
-            log.error("图书索引删除失败: {}", e.getMessage());
+            log.error("图书索引删除失败: id={}, err={}", bookId, e.getMessage());
+            throw new IllegalStateException("图书索引删除失败: id=" + bookId, e);
         }
     }
 

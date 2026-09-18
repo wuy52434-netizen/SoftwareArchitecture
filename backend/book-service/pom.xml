@@ -14,6 +14,11 @@
     <name>图书服务</name>
     <description>图书CRUD、分类管理、库存管理</description>
 
+    <properties>
+        <!-- 本模块有 16 条单元测试，实测行覆盖率约 52%，门禁锁定在 50% 做棘轮保护 -->
+        <jacoco.line.coveredratio.minimum>0.50</jacoco.line.coveredratio.minimum>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.library</groupId>
@@ -53,6 +58,14 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- 图书变更事件（KNWN-ES-01）：以 MQ 通知 search-service 同步索引。
+             选异步而非同步 Feign 调用：既有的借还链路已经是事件驱动，
+             同步调用会让"图书写入"依赖搜索服务的可用性。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
         <dependency>

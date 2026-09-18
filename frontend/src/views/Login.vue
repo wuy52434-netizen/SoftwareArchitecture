@@ -17,6 +17,7 @@
         :model="loginForm"
         :rules="loginRules"
         class="login-form"
+        data-testid="login-form"
         @submit.prevent="handleLogin"
       >
         <el-form-item prop="username">
@@ -25,6 +26,7 @@
             placeholder="请输入用户名"
             prefix-icon="User"
             size="large"
+            data-testid="login-username"
           />
         </el-form-item>
 
@@ -36,12 +38,13 @@
             prefix-icon="Lock"
             size="large"
             show-password
+            data-testid="login-password"
             @keyup.enter="handleLogin"
           />
         </el-form-item>
 
         <el-form-item>
-          <el-checkbox v-model="loginForm.rememberMe">记住我</el-checkbox>
+          <el-checkbox v-model="loginForm.rememberMe" data-testid="login-remember">记住我</el-checkbox>
         </el-form-item>
 
         <el-form-item>
@@ -50,6 +53,7 @@
             size="large"
             :loading="loading"
             class="login-btn"
+            data-testid="login-submit"
             @click="handleLogin"
           >
             登录
@@ -64,11 +68,11 @@
       <div class="quick-login">
         <p>快速登录</p>
         <div class="quick-login-options">
-          <el-button type="primary" plain @click="quickLogin('admin')">
+          <el-button type="primary" plain data-testid="quick-login-admin" @click="quickLogin('admin')">
             <el-icon><User /></el-icon>
             管理员
           </el-button>
-          <el-button type="success" plain @click="quickLogin('user')">
+          <el-button type="success" plain data-testid="quick-login-user" @click="quickLogin('user')">
             <el-icon><UserFilled /></el-icon>
             普通用户
           </el-button>
@@ -146,20 +150,22 @@ function redirectToDashboard() {
 async function handleLogin() {
   if (!loginFormRef.value) return
 
-  await loginFormRef.value.validate(async (valid) => {
-    if (!valid) return
+  // 用 promise 形式校验并 catch：validate(callback) 在校验失败时会 reject，
+  // 直接 await 不接会抛未处理的 Promise 拒绝（控制台报错、也难排查）。
+  const valid = await loginFormRef.value.validate().catch(() => false)
+  if (!valid) return
 
-    loading.value = true
-    try {
-      await authStore.login(loginForm.username, loginForm.password)
-      ElMessage.success('登录成功')
-      redirectToDashboard()
-    } catch (error) {
-      ElMessage.error(error.message || '登录失败，请检查用户名和密码')
-    } finally {
-      loading.value = false
-    }
-  })
+  loading.value = true
+  try {
+    await authStore.login(loginForm.username, loginForm.password)
+    ElMessage.success('登录成功')
+    redirectToDashboard()
+  } catch (error) {
+    // 业务错误统一由调用方提示一次；拦截器不再重复弹（见 api/index.js 的说明）
+    ElMessage.error(error.message || '登录失败，请检查用户名和密码')
+  } finally {
+    loading.value = false
+  }
 }
 
 function quickLogin(type) {

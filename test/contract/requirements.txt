@@ -1,0 +1,5 @@
+# 测试依赖（版本为 2026-09 实测可用版本）
+requests==2.34.2
+pytest==9.1.1
+jsonschema==4.23.0
+pytest-html==4.2.0

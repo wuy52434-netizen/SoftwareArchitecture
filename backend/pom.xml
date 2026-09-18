@@ -40,6 +40,13 @@
         <lombok.version>1.18.30</lombok.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <springdoc.version>2.3.0</springdoc.version>
+
+        <jacoco.version>0.8.12</jacoco.version>
+        <!-- 覆盖率质量门禁：行覆盖率低于该阈值则 verify 阶段失败。
+             各子模块可在自己的 pom 中覆盖 jacoco.line.coveredratio.minimum。 -->
+        <jacoco.line.coveredratio.minimum>0.15</jacoco.line.coveredratio.minimum>
+        <!-- 门禁总开关：mvn verify -Djacoco.check.skip=true 可临时关闭 -->
+        <jacoco.check.skip>false</jacoco.check.skip>
     </properties>
 
     <dependencyManagement>
@@ -194,8 +201,63 @@
                         </annotationProcessorPaths>
                     </configuration>
                 </plugin>
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
+                </plugin>
             </plugins>
         </pluginManagement>
+
+        <!-- 覆盖率采集与报告：所有子模块继承。
+             prepare-agent 在 initialize 阶段注入 -javaagent，
+             report 在 verify 阶段产出 target/site/jacoco/index.html。 -->
+        <plugins>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <!-- 覆盖率质量门禁：verify 阶段校验行覆盖率，不达标直接失败。
+                         无测试产物的模块（未生成 jacoco.exec）会自动跳过。 -->
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${jacoco.check.skip}</skip>
+                            <haltOnFailure>true</haltOnFailure>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.line.coveredratio.minimum}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 
 </project>

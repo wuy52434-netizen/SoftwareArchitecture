@@ -30,6 +30,14 @@
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
+        <!-- 消费端幂等去重（KNWN-MQ-03）：去重键必须跨实例共享，
+             否则多副本部署时每个副本各自"第一次见过"，重复通知照旧发出。
+             项目已统一使用 Redis，这里复用同一份基础设施。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>

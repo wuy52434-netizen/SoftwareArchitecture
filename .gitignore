@@ -145,3 +145,42 @@ __MACOSX/
 # JMeter generated reports/results
 demo/jmeter/run-*/
 demo/jmeter/*.jtl
+
+# ---------------------------------------------------------------- 测试产物
+# 各套件的 HTML 报告、Allure 产物、JMeter 报告、运行结果 JSON 由 CI/本地运行时生成，不入库
+test/*/report*.html
+test/*/*report.html
+test/*/junit*.xml
+test/*/allure-results/
+test/*/allure-report/
+test/*/.pytest_cache/
+test/*/_allure_cli.cmd
+test/*/compat_results.json
+test/*/cache_data_results.json
+test/*/functional_results.json
+test/*/perf_results.json
+test/*/regression_results.json
+test/*/security_results.json
+test/jmeter/report/
+test/jmeter/report_*/
+
+# ---------------------------------------------------------------- 前端构建产物
+frontend/dist/
+
+# ---------------------------------------------------------------- 本地临时/日志
+tmp/
+*.bak
+*.bak2
+tmp_*.txt
+jmeter.log
+rendered_report/
+merged_*/
+
+# ---------------------------------------------------------------- 文档/报告输出（按需入库，不自动收）
+output/
+openclaw_training_report/
+_doc_merge_assets/
+_merge_tmp_imgs/
+
+# ---------------------------------------------------------------- 智能体工作区
+.workbuddy/

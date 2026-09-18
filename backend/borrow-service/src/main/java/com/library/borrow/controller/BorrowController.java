@@ -1,5 +1,7 @@
 package com.library.borrow.controller;
 
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
+import com.alibaba.csp.sentinel.slots.block.BlockException;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.library.borrow.dto.BorrowDTO.*;
 import com.library.borrow.entity.BorrowRecord;
@@ -27,6 +29,7 @@ public class BorrowController {
 
     @Operation(summary = "借阅图书")
     @PostMapping("/borrow")
+    @SentinelResource(value = "borrowBook", blockHandler = "borrowBookBlockHandler")
     public Result<BorrowResponse> borrowBook(
             @Valid @RequestBody BorrowRequest request,
             HttpServletRequest servletRequest) {
@@ -35,15 +38,22 @@ public class BorrowController {
             userId = request.getUserId();
         }
         if (userId == null) {
-            return Result.error(ResultCode.UNAUTHORIZED.getCode(), "请先登录或在借书机输入读者证号");
+            return Result.error(ResultCode.UNAUTHORIZED.getCode(), "未登录或在借书机输入读者证号");
         }
 
         BorrowRecord record = borrowService.borrowBook(userId, request);
         return Result.success("借阅成功", borrowService.toBorrowResponse(record));
     }
 
+    /** 借阅被 Sentinel 限流时触发的降级返回 */
+    public Result<BorrowResponse> borrowBookBlockHandler(
+            @Valid BorrowRequest request, HttpServletRequest servletRequest, BlockException ex) {
+        return Result.error(ResultCode.SYSTEM_BUSY.getCode(), "系统繁忙，借阅请求被限流拦截，请稍后再试");
+    }
+
     @Operation(summary = "归还图书")
     @PostMapping("/return")
+    @SentinelResource(value = "returnBook", blockHandler = "returnBookBlockHandler")
     public Result<ReturnResponse> returnBook(
             @Valid @RequestBody ReturnRequest request,
             HttpServletRequest servletRequest) {
@@ -60,6 +70,12 @@ public class BorrowController {
 
         ReturnResponse response = borrowService.returnBook(userId, request);
         return Result.success("归还成功", response);
+    }
+
+    /** 归还被 Sentinel 限流时触发的降级返回 */
+    public Result<ReturnResponse> returnBookBlockHandler(
+            @Valid ReturnRequest request, HttpServletRequest servletRequest, BlockException ex) {
+        return Result.error(ResultCode.SYSTEM_BUSY.getCode(), "系统繁忙，归还请求被限流拦截，请稍后再试");
     }
 
     @Operation(summary = "获取借阅记录列表")
