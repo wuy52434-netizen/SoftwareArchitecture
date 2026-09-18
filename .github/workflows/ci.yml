@@ -178,17 +178,12 @@ jobs:
         continue-on-error: true
         run: |
           bash test/scripts/run_special_suites.sh || echo "[audit] 专项套件含已定位的真实缺陷（XSS/健壮性），明细见 *_results.json"
-          ls -la test/reports/ 2>/dev/null || true
-          echo "--- security 摘要 ---"
-          python3 - <<'PYEOF' 2>/dev/null || true
-import json,glob,os
-for j in glob.glob('test/*/*_results.json'):
-    try:
-        d=json.load(open(j,encoding='utf-8'))
-        print(os.path.basename(os.path.dirname(j)), d['summary'])
-    except Exception:
-        pass
-PYEOF
+          echo "--- 专项结果 JSON 摘要 ---"
+          for f in test/security/security_results.json test/functional/functional_results.json test/compat/compat_results.json test/regression/regression_results.json test/smoke/smoke_results.json test/perf/perf_results.json; do
+            if [ -f "$f" ]; then
+              echo "[$(basename "$(dirname "$f")")] $(head -c 200 "$f" | tr -d '\n')"
+            fi
+          done
 
       - name: 导出 Docker 容器日志（失败时排查用）
         if: failure()
