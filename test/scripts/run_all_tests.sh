@@ -77,9 +77,13 @@ if ! docker info >/dev/null 2>&1; then
   exit 2
 fi
 echo "[ok] docker: $(docker --version)"
-if [ ! -f "$PY" ]; then
-  echo "[FATAL] 测试解释器不存在：$PY"
-  echo "        请先创建：uv venv --python 3.12 C:/Users/ChenZhiBang/.venv-library-test"
+# $PY 可能是绝对路径（本机 venv）也可能是命令名（CI 的 python3）。
+# 用 `-f` 只能判断文件路径，对命令名会误报"不存在"，因此两种形式都校验。
+if [ -n "$PY" ] && { [ -f "$PY" ] || command -v "$PY" >/dev/null 2>&1; }; then
+  :
+else
+  echo "[FATAL] 找不到测试解释器（既不是文件也不是命令）：$PY"
+  echo "        本机请先创建：uv venv --python 3.12 C:/Users/ChenZhiBang/.venv-library-test"
   exit 2
 fi
 echo "[ok] python: $("$PY" -V 2>&1)"
@@ -188,7 +192,7 @@ sleep 20
 
 # ------------------------------------------------------------------ 3. 灌 ES 索引
 step "3/6 灌入 Elasticsearch 索引"
-"$PY" "$ROOT_WIN\\seed_es_books.py" 2>&1 | tail -12
+"$PY" "$ROOT/seed_es_books.py" 2>&1 | tail -12
 echo "当前索引文档数：$(curl -s "$ES/books/_count" | head -c 120)"
 
 # ------------------------------------------------------------------ 4. 逐个套件真跑
@@ -222,7 +226,7 @@ if has_suite unit; then
   [ $code -eq 0 ] && echo "[PASS] unit+jacoco" || echo "[FAIL] unit+jacoco (exit=$code)"
   echo ""
   echo "覆盖率汇总："
-  "$PY" "$ROOT_WIN\\test\\tools\\coverage_summary.py" || true
+  "$PY" "$ROOT/test/tools/coverage_summary.py" || true
 fi
 
 if has_suite api; then
