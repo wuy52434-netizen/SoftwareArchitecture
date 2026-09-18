@@ -10,6 +10,12 @@ CREATE DATABASE IF NOT EXISTS library DEFAULT CHARACTER SET utf8mb4 COLLATE utf8
 
 USE library;
 
+-- 关键：声明脚本文件的连接字符集为 utf8mb4。
+-- MySQL 官方镜像在 /docker-entrypoint-initdb.d 首次初始化时，mysql 客户端默认按 latin1
+-- 解释脚本字节，导致本文件里的中文（UTF-8 无 BOM）被误读成 ä¸‰ä½“ 之类乱码入库。
+-- 加上这一行后，客户端以 utf8mb4 读取后续所有以字面量写的中文，保证种子数据正确。
+SET NAMES utf8mb4;
+
 -- ============================================
 -- 读者分类表
 -- ============================================

@@ -87,6 +87,21 @@ def auth_client(client, admin_token):
     return client
 
 
+@pytest.fixture(scope="session")
+def admin_id(client, admin_token):
+    """动态解析管理员用户的真实 userId。
+
+    不要硬编码 id（旧代码写死 9，只在新库刚好 admin 排第 9 时成立；
+    CI/全新库下 admin 自增 id 是 1，导致 GET /api/users/9 返回 1001）。"""
+    body = client.get("/api/users").json()
+    for u in body.get("data", []) or []:
+        if u.get("username") == ADMIN_USER:
+            uid = u.get("userId") or u.get("id")
+            assert uid is not None, f"用户 {ADMIN_USER} 无 userId 字段: {u}"
+            return uid
+    raise AssertionError(f"用户列表里找不到管理员 {ADMIN_USER}")
+
+
 @pytest.fixture
 def fresh_client():
     """全新的无 token 客户端。每次独立创建，避免 session 级共享 client 的 token 污染。"""

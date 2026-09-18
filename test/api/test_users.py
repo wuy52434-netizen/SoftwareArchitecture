@@ -37,9 +37,9 @@ class TestUserList:
 
 
 class TestUserGet:
-    def test_get_user_by_id_admin(self, client, admin_token):
-        # 获取 admin 自身（id=9）
-        body = client.get("/api/users/9").json()
+    def test_get_user_by_id_admin(self, client, admin_token, admin_id):
+        # 获取 admin 自身（id 用 admin_id 夹具动态解析，勿硬编码，见 conftest 说明）
+        body = client.get(f"/api/users/{admin_id}").json()
         assert body["code"] == 200
         assert body["data"]["username"] == "admin"
 
@@ -78,17 +78,19 @@ class TestUserCreateReadUpdate:
 
 
 class TestUserUpdateStatus:
-    def test_update_user_status(self, client, admin_token):
+    def test_update_user_status(self, client, admin_token, admin_id):
         """更新用户状态：参数走 query（契约属性校验）。"""
-        body = client.put("/api/users/9/status", params={"status": "active"}).json()
+        body = client.put(f"/api/users/{admin_id}/status", params={"status": "active"}).json()
         # 契约：status 为 query param；接受业务成功/业务错误，不允许 500
         assert body["code"] in (200, 5001) or body["code"] != 500
 
-    def test_update_self_profile(self, client, admin_token):
+    def test_update_self_profile(self, client, admin_token, admin_id):
         # 管理员更新自己真实姓名（幂等测试：改回原名）
-        profile = client.get("/api/users/9").json()["data"]
+        profile = client.get(f"/api/users/{admin_id}").json()["data"]
+        profile = profile or {}
         original = profile.get("realName")
-        body = client.put("/api/users/9", json={"realName": original}).json()
+        assert original is not None, f"admin({admin_id}) 拿不到 realName: {profile}"
+        body = client.put(f"/api/users/{admin_id}", json={"realName": original}).json()
         assert body["code"] == 200
 
 
